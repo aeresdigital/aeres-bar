@@ -125,7 +125,7 @@ Detalhes que valem saber:
 
 - **As porcentagens vêm dos provedores** e incluem o uso em qualquer dispositivo, como o app e a web. **Os tokens vêm dos logs deste Mac** e contam apenas o que rodou aqui. As respostas são deduplicadas: o Claude Code grava a mesma resposta uma vez por bloco de conteúdo, e o Codex repete eventos `token_count`.
 - **Janela "começa no próximo uso":** o Codex e o Antigravity informam janelas ainda não usadas com uma renovação que anda junto com o relógio. Nesse caso o painel diz isso em vez de mostrar uma contagem regressiva falsa.
-- **Consulta gentil às APIs:** uma resposta com menos de 60 s é reaproveitada, então passar o mouse não gera uma chamada. Um HTTP 429 respeita o `Retry-After`, entre 30 s e 30 min, ou pausa 5 min.
+- **Consulta gentil às APIs:** uma resposta recente é reaproveitada (3 min na Anthropic, cujo limite de requisições é apertado, e 1 min no ChatGPT), então passar o mouse não gera uma chamada. Um HTTP 429 respeita o `Retry-After`, entre 30 s e 30 min, ou pausa 5 min.
 - **O Antigravity só responde enquanto está aberto.** O AERES Bar localiza o processo `language_server` (`ps`), a porta em escuta (`lsof`) e o token CSRF da linha de comando do processo.
 - **Credenciais expiradas não são renovadas pelo app.** Isso é de propósito: renovar um OAuth rotaciona o *refresh token* e poderia deslogar o Claude Code ou o Codex. Quando você volta a usar a ferramenta, ela renova sozinha e o AERES Bar volta a ler.
 
