@@ -52,6 +52,7 @@ final class PanelController {
     init(
         store: UsageStore,
         settings: AppSettings,
+        updater: AppUpdater?,
         makeMenu: @escaping () -> NSMenu,
         isStatusItemWindow: @escaping (NSWindow?) -> Bool
     ) {
@@ -63,7 +64,9 @@ final class PanelController {
         actions.refresh = { [weak store] in store?.refreshAll(reason: .manual) }
         actions.openMenu = { [weak self] in self?.showSettingsMenu() }
         actions.quit = { NSApp.terminate(nil) }
-        let hosting = PanelHostingView(rootView: PanelRootView(store: store, settings: settings, state: state, actions: actions))
+        let hosting = PanelHostingView(
+            rootView: PanelRootView(store: store, settings: settings, state: state, actions: actions, updater: updater)
+        )
         hosting.sizingOptions = [.intrinsicContentSize]
         hosting.frame = NSRect(x: 0, y: 0, width: PanelRootView.width, height: 320)
         hosting.onIntrinsicSizeChange = { [weak self] in

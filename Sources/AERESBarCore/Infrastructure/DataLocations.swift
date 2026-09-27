@@ -160,9 +160,18 @@ public enum DataLocations {
 
     /// AERES Bar's own cache of the last snapshots.
     public static var snapshotCacheFile: URL {
+        applicationSupport.appendingPathComponent("snapshots.json")
+    }
+
+    /// Left by the update helper when it could not swap the apps; reported on the next launch.
+    public static var updateFailureMarker: URL {
+        applicationSupport.appendingPathComponent("update-failed")
+    }
+
+    private static var applicationSupport: URL {
         let support =
             FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? home.appendingPathComponent("Library/Application Support")
-        return support.appendingPathComponent("AERES Bar", isDirectory: true).appendingPathComponent("snapshots.json")
+        return support.appendingPathComponent("AERES Bar", isDirectory: true)
     }
 }

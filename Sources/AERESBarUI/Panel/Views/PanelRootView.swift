@@ -11,6 +11,7 @@ struct PanelRootView: View {
     let settings: AppSettings
     @Bindable var state: PanelState
     let actions: PanelActions
+    var updater: AppUpdater?
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 1)) { timeline in
@@ -49,6 +50,10 @@ struct PanelRootView: View {
 
     private func body(shown: [ProviderID], absent: [ProviderID], rings: [SummaryRing], now: Date) -> some View {
         VStack(spacing: 0) {
+            if let updater, UpdatePresentation.notice(for: updater.phase, currentVersion: updater.currentVersion) != nil {
+                UpdateNotice(updater: updater)
+                Divider().opacity(0.6)
+            }
             if !rings.isEmpty {
                 SummaryRow(rings: rings, expanded: state.expanded) { state.toggle($0) }
                 Divider().opacity(0.6)

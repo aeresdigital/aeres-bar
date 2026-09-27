@@ -1,22 +1,32 @@
 import AERESBarCore
 import AppKit
 
-/// The right-click / gear menu with every preference.
+/// The right-click / gear menu with every preference, and the app's updates.
 @MainActor
 final class SettingsMenu: NSObject {
     private let store: UsageStore
     private let settings: AppSettings
     private let secrets: any SecretStore
+    private let updater: AppUpdater?
 
-    init(store: UsageStore, settings: AppSettings, secrets: any SecretStore) {
+    init(store: UsageStore, settings: AppSettings, secrets: any SecretStore, updater: AppUpdater? = nil) {
         self.store = store
         self.settings = settings
         self.secrets = secrets
+        self.updater = updater
     }
 
     func makeMenu() -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
+
+        if let updater, let title = UpdatePresentation.menuTitle(for: updater.phase) {
+            let install = item(title, #selector(installUpdate))
+            install.isEnabled = !updater.isBusy
+            install.image = NSImage(systemSymbolName: "arrow.down.circle.fill", accessibilityDescription: nil)
+            menu.addItem(install)
+            menu.addItem(.separator())
+        }
 
         menu.addItem(item("Atualizar agora", #selector(refresh), key: "r"))
         menu.addItem(.separator())
@@ -74,8 +84,16 @@ final class SettingsMenu: NSObject {
         let about = NSMenuItem(title: "\(AppInfo.name) \(AppInfo.version)", action: nil, keyEquivalent: "")
         about.isEnabled = false
         menu.addItem(about)
+        menu.addItem(checkForUpdatesItem())
         menu.addItem(item("Sair do \(AppInfo.name)", #selector(quit), key: "q"))
         return menu
+    }
+
+    private func checkForUpdatesItem() -> NSMenuItem {
+        let entry = item(updater?.phase == .checking ? "Procurando atualizações…" : "Procurar atualizações…", #selector(checkForUpdates))
+        entry.isEnabled = updater?.isEnabled == true && updater?.isBusy == false
+        if updater?.isEnabled != true { entry.toolTip = "Só no app instalado" }
+        return entry
     }
 
     /// One submenu per key: its state, set, remove and where to create one.
@@ -199,4 +217,41 @@ final class SettingsMenu: NSObject {
     }
 
     @objc private func quit() { NSApp.terminate(nil) }
+
+    @objc private func installUpdate() {
+        guard let updater, let manifest = updater.pendingUpdate else { return }
+        guard UpdatePrompt.confirm(UpdatePresentation.confirmation(for: manifest, currentVersion: updater.currentVersion)) else {
+            updater.dismiss()
+            return
+        }
+        install(with: updater)
+    }
+
+    @objc private func checkForUpdates() {
+        guard let updater else { return }
+        Task { @MainActor [weak self] in
+            let result = await updater.check(userInitiated: true)
+            let message = UpdatePresentation.checkMessage(for: result, currentVersion: updater.currentVersion)
+            guard case .available = result else {
+                let isProblem = if case .failed = result { true } else { false }
+                UpdatePrompt.inform(message, isProblem: isProblem)
+                return
+            }
+            if UpdatePrompt.confirm(message) {
+                self?.install(with: updater)
+            } else {
+                updater.dismiss()
+            }
+        }
+    }
+
+    /// Installs and, since the menu is gone by then, reports a failure in a dialog. On success the
+    /// app quits and the new version opens.
+    private func install(with updater: AppUpdater) {
+        guard let task = updater.install() else { return }
+        Task { @MainActor in
+            await task.value
+            if case .failed(let failure, _) = updater.phase { UpdatePrompt.showFailure(failure) }
+        }
+    }
 }

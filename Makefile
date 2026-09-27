@@ -1,6 +1,6 @@
 SHELL := /bin/zsh
 SWIFT_FORMAT := swift run -c release --package-path BuildTools swift-format
-LINT_PATHS := Package.swift BuildTools/Package.swift Sources Tests scripts/make_icon.swift
+LINT_PATHS := Package.swift BuildTools/Package.swift Sources Tests scripts/make_icon.swift scripts/sign_update.swift
 
 .DEFAULT_GOAL := help
 .PHONY: help build test coverage format lint check app dmg install uninstall run dump preview icon docs-images clean

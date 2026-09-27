@@ -210,6 +210,7 @@ struct CLICommandTests {
             (["--login-item", "off"], .loginItem(.off)),
             (["--set-key", "openrouter"], .setKey(.openRouter)),
             (["--delete-key", "ollama"], .deleteKey(.ollama)),
+            (["--check-update"], .checkUpdate),
             (["--version"], .version),
             (["-h"], .help),
         ]

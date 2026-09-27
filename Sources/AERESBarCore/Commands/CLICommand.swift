@@ -16,6 +16,8 @@ public enum CLICommand: Equatable, Sendable {
     case setKey(SecretAccount)
     /// Remove a stored API key.
     case deleteKey(SecretAccount)
+    /// Compare the installed version with the newest published one.
+    case checkUpdate
     case version
     case help
     /// Unrecognised input, with the reason.
@@ -42,6 +44,8 @@ public enum CLICommand: Equatable, Sendable {
                 return .invalid("\(first) aceita \(names)")
             }
             return first == "--set-key" ? .setKey(account) : .deleteKey(account)
+        case "--check-update":
+            return .checkUpdate
         case "--version", "-v":
             return .version
         case "--help", "-h":
@@ -69,6 +73,7 @@ public enum CLICommand: Equatable, Sendable {
                                        ou recebida pela entrada padrão
               --delete-key \(accounts)
                                        apaga a chave guardada
+              --check-update           compara a versão instalada com a mais recente
               --version                mostra a versão
               --help                   mostra esta ajuda
             """

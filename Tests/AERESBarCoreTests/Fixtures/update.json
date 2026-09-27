@@ -1,0 +1,8 @@
+{
+  "version": "1.0.42",
+  "build": 42,
+  "notes": "### Novidades\n\n- Atualização pelo próprio app\n- Provedores chineses\n\n### Correções\n\n- O painel não fecha ao clicar num anel\n",
+  "url": "https://github.com/aeresdigital/aeres-bar-releases/releases/download/v1.0.42/AERES-Bar.zip",
+  "signature": "c2lnbmF0dXJl",
+  "minimumSystemVersion": "14.0"
+}

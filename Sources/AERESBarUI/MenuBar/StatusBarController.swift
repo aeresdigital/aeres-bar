@@ -10,6 +10,7 @@ final class StatusBarController: NSObject {
 
     private let store: UsageStore
     private let settings: AppSettings
+    private let updater: AppUpdater?
     private let settingsMenu: SettingsMenu
     private var item: NSStatusItem?
     private var tracker: HoverTracker?
@@ -17,13 +18,15 @@ final class StatusBarController: NSObject {
     private lazy var panel = PanelController(
         store: store,
         settings: settings,
+        updater: updater,
         makeMenu: { [unowned self] in settingsMenu.makeMenu() },
         isStatusItemWindow: { [unowned self] window in window != nil && window === item?.button?.window }
     )
 
-    init(store: UsageStore, settings: AppSettings, settingsMenu: SettingsMenu) {
+    init(store: UsageStore, settings: AppSettings, updater: AppUpdater?, settingsMenu: SettingsMenu) {
         self.store = store
         self.settings = settings
+        self.updater = updater
         self.settingsMenu = settingsMenu
         super.init()
     }

@@ -86,6 +86,23 @@ enum CommandLineTool {
         }
     }
 
+    /// Compares the installed build with the newest one in the feed.
+    static func checkUpdate() {
+        run {
+            let feed = LiveEnvironment.updateFeed
+            print("Instalada: \(AppInfo.name) \(AppInfo.version) (build \(AppInfo.build))")
+            do {
+                let latest = try await feed.latest()
+                print("Publicada: \(AppInfo.name) \(latest.version) (build \(latest.build)), em \(feed.manifestURL.absoluteString)")
+                let isUpdate = latest.isUpdate(over: Int(AppInfo.build) ?? 0, system: ProcessInfo.processInfo.operatingSystemVersion)
+                print(isUpdate ? "Há uma versão nova: o app a oferece no painel e no menu." : "Você já tem a versão mais recente.")
+            } catch let failure as UpdateFailure {
+                report("erro: \(failure.message)")
+                exit(1)
+            }
+        }
+    }
+
     /// Runs async work on the main actor, then exits with its outcome.
     private static func run(_ work: @escaping @MainActor () async throws -> Void) {
         Task { @MainActor in
