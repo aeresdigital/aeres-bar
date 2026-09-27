@@ -32,33 +32,40 @@ struct PanelRootView: View {
                 actions: actions
             )
             Divider().opacity(0.6)
-            if !rings.isEmpty {
-                SummaryRow(rings: rings, expanded: state.expanded) { state.toggle($0) }
-                Divider().opacity(0.6)
-            }
-            if shown.isEmpty {
-                Text("Nenhum provedor encontrado neste Mac.")
-                    .font(.system(size: 11.5))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
-            }
-            ForEach(shown) { provider in
-                ProviderSection(
-                    provider: provider,
-                    snapshot: store.snapshots[provider],
-                    now: now,
-                    isExpanded: state.expanded.contains(provider),
-                    onToggle: { state.toggle(provider) }
-                )
-                if provider != shown.last {
-                    Divider().opacity(0.35).padding(.horizontal, 14)
+            // Everything below the header scrolls once it no longer fits under the menu bar.
+            ScrollView(.vertical) {
+                VStack(spacing: 0) {
+                    if !rings.isEmpty {
+                        SummaryRow(rings: rings, expanded: state.expanded) { state.toggle($0) }
+                        Divider().opacity(0.6)
+                    }
+                    if shown.isEmpty {
+                        Text("Nenhum provedor encontrado neste Mac.")
+                            .font(.system(size: 11.5))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(16)
+                    }
+                    ForEach(shown) { provider in
+                        ProviderSection(
+                            provider: provider,
+                            snapshot: store.snapshots[provider],
+                            now: now,
+                            isExpanded: state.expanded.contains(provider),
+                            onToggle: { state.toggle(provider) }
+                        )
+                        if provider != shown.last {
+                            Divider().opacity(0.35).padding(.horizontal, 14)
+                        }
+                    }
+                    if let line = UsagePresentation.unconfiguredLine(for: absent) {
+                        Divider().opacity(0.6)
+                        UnconfiguredFooter(text: line, action: actions.openMenu)
+                    }
                 }
             }
-            if let line = UsagePresentation.unconfiguredLine(for: absent) {
-                Divider().opacity(0.6)
-                UnconfiguredFooter(text: line, action: actions.openMenu)
-            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(maxHeight: state.maxScrollHeight)
         }
     }
 }

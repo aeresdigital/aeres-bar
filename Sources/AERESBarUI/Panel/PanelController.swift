@@ -8,6 +8,8 @@ import SwiftUI
 final class PanelState {
     var expanded: Set<ProviderID> = []
     var pinned = false
+    /// Tallest the scrolling part may grow before it scrolls: set from the screen's height.
+    var maxScrollHeight: CGFloat = .infinity
 
     func toggle(_ provider: ProviderID) {
         if expanded.contains(provider) {
@@ -109,6 +111,10 @@ final class PanelController {
         state.pinned = pinned
         self.anchor = anchor
         outsideSince = nil
+        if let screen = anchor.window?.screen ?? NSScreen.main {
+            // Room below the menu bar, minus the header that stays put.
+            state.maxScrollHeight = max(240, screen.visibleFrame.height - Self.gap - 8 - 60)
+        }
         fitToContent()
 
         if !isVisible {

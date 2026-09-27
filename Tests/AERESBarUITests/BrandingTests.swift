@@ -151,6 +151,15 @@ struct MeterImageTests {
         #expect(alpha(rep, x: 5.4, y: 8) < 0.05)
     }
 
+    @Test("Com mais de seis provedores, a imagem alarga em vez de afinar as barras")
+    func widensForManyProviders() throws {
+        #expect([3, 6, 7, 11].map { MeterImage.width(for: $0, pointSize: 16) } == [16, 16, 19, 29])
+        let image = MeterImage.template(levels: Array(repeating: 50, count: 11))
+        #expect(image.size == NSSize(width: 29, height: 16))
+        let rep = try #require(MeterImage.render(levels: Array(repeating: 100, count: 11), pointSize: 16, scale: 2))
+        #expect(rep.pixelsWide == 58 && rep.pixelsHigh == 32)
+    }
+
     @Test("Sem provedores, desenha três trilhos vazios; muitos provedores cabem no quadro")
     func placeholders() throws {
         let empty = try #require(MeterImage.render(levels: [], pointSize: 16, scale: 2))

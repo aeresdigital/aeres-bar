@@ -48,6 +48,31 @@ struct SummaryRingsTests {
         #expect(empty.alphaComponent < 0.3)
     }
 
+    @Test("Até seis anéis por linha; mais que isso quebra em linhas equilibradas")
+    func rows() {
+        #expect([1, 5, 6, 7, 11, 12, 13].map(SummaryRow.perRow) == [1, 5, 6, 4, 6, 6, 5])
+        #expect(SummaryRow.perRow(for: 0) == 1)
+    }
+
+    @Test("Painel mais alto que a tela rola abaixo do cabeçalho")
+    func scrollsWhenTall() async throws {
+        let temporary = try TemporarySettings()
+        defer { temporary.remove() }
+        let store = DemoData.store()
+        await store.refreshAllAndWait()
+        func height(limit: CGFloat) -> CGFloat {
+            let state = PanelState()
+            state.maxScrollHeight = limit
+            let view = PanelRootView(store: store, settings: temporary.settings, state: state, actions: PanelActions())
+            return ImageRenderer(content: view).nsImage?.size.height ?? 0
+        }
+        let full = height(limit: .infinity)
+        let capped = height(limit: 200)
+        #expect(full > 500)
+        #expect(capped < 280)  // the header plus the 200 pt the content may take
+        #expect(capped > 200)
+    }
+
     @Test("Os anéis encolhem para caber seis na largura do painel")
     func diameters() {
         #expect(SummaryRow.diameter(for: 3) == 52)

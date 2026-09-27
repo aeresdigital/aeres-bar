@@ -13,7 +13,7 @@ public enum MeterImage {
         if let cached = cache[key] { return cached }
         if cache.count > 128 { cache.removeAll() }
 
-        let image = NSImage(size: NSSize(width: pointSize, height: pointSize))
+        let image = NSImage(size: NSSize(width: width(for: levels.count, pointSize: pointSize), height: pointSize))
         for scale in [1, 2, 3] {
             if let rep = render(levels: levels, pointSize: pointSize, scale: CGFloat(scale)) {
                 image.addRepresentation(rep)
@@ -25,12 +25,20 @@ public enum MeterImage {
         return image
     }
 
+    /// Bars stay at least 1.5 pt wide and 1 pt apart: past six providers the image grows wider
+    /// instead of squeezing them.
+    static func width(for count: Int, pointSize: CGFloat) -> CGFloat {
+        let needed = CGFloat(count) * 1.5 + CGFloat(max(count - 1, 0)) + 2
+        return max(pointSize, needed.rounded(.up))
+    }
+
     static func render(levels: [Double?], pointSize: CGFloat, scale: CGFloat) -> NSBitmapImageRep? {
+        let pointWidth = width(for: levels.count, pointSize: pointSize)
         let pixels = Int((pointSize * scale).rounded())
         guard
             let rep = NSBitmapImageRep(
                 bitmapDataPlanes: nil,
-                pixelsWide: pixels,
+                pixelsWide: Int((pointWidth * scale).rounded()),
                 pixelsHigh: pixels,
                 bitsPerSample: 8,
                 samplesPerPixel: 4,
@@ -42,16 +50,16 @@ public enum MeterImage {
             ),
             let graphics = NSGraphicsContext(bitmapImageRep: rep)
         else { return nil }
-        rep.size = NSSize(width: pointSize, height: pointSize)
+        rep.size = NSSize(width: pointWidth, height: pointSize)
 
         // With nothing to show yet, draw three empty tracks so the item keeps its shape.
         let bars: [Double?] = levels.isEmpty ? [nil, nil, nil] : levels
         let count = CGFloat(bars.count)
         let gap: CGFloat = bars.count > 4 ? 1 : 1.5
-        let width = min(4, max(1.5, (pointSize - 2 - gap * (count - 1)) / count))
+        let width = min(4, max(1.5, (pointWidth - 2 - gap * (count - 1)) / count))
         let bottom: CGFloat = 1.5
         let height = pointSize - 3
-        var x = (pointSize - (width * count + gap * (count - 1))) / 2
+        var x = (pointWidth - (width * count + gap * (count - 1))) / 2
 
         let context = graphics.cgContext
         context.scaleBy(x: scale, y: scale)
