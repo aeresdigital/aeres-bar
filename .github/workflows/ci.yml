@@ -32,7 +32,7 @@ jobs:
       - name: swift-format lint --strict
         run: >-
           swift run -c release --package-path BuildTools swift-format lint --strict --parallel --recursive
-          Package.swift BuildTools/Package.swift Sources Tests scripts/make_icon.swift
+          Package.swift BuildTools/Package.swift Sources Tests scripts/make_icon.swift scripts/sign_update.swift
 
   build-test:
     name: Build, testes e cobertura (macOS)
@@ -40,8 +40,6 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0  # build number = commit count
 
       - name: Selecionar o Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -68,20 +66,3 @@ jobs:
           name: coverage-lcov
           path: .build/coverage/coverage.lcov
           retention-days: 14
-
-      - name: App universal e DMG
-        if: github.event_name == 'push'
-        run: |
-          UNIVERSAL=1 scripts/build_app.sh
-          scripts/make_dmg.sh
-
-      - name: Publicar DMG de desenvolvimento
-        if: github.event_name == 'push'
-        uses: actions/upload-artifact@v7
-        with:
-          name: AERES-Bar-${{ github.sha }}
-          path: |
-            dist/*.dmg
-            dist/*.sha256
-          retention-days: 14
-          if-no-files-found: error

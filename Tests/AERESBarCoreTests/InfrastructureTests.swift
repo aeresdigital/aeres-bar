@@ -94,6 +94,26 @@ struct InfrastructureTests {
         #expect(path.hasPrefix("/usr/bin:/opt/homebrew/bin:/usr/local/bin:"))
     }
 
+    @Test("Mais comandos ao mesmo tempo do que threads no pool não travam")
+    func manyConcurrentCommands() async {
+        // Every caller blocks a Swift concurrency thread while its command runs; with more callers
+        // than the pool has threads, pipes drained on the global dispatch queues were never read,
+        // and every command timed out.
+        let callers = ProcessInfo.processInfo.activeProcessorCount * 2 + 2
+        let start = Date()
+        let statuses = await withTaskGroup(of: Int32?.self) { group in
+            for _ in 0..<callers {
+                group.addTask { ProcessCommandRunner().run("/bin/echo", ["ok"], timeout: 15)?.status }
+            }
+            var statuses: [Int32?] = []
+            for await status in group { statuses.append(status) }
+            return statuses
+        }
+        #expect(statuses.count == callers)
+        #expect(statuses.allSatisfy { $0 == 0 })
+        #expect(Date().timeIntervalSince(start) < 10)
+    }
+
     @Test("Entrega a entrada padrão ao comando")
     func standardInput() throws {
         let output = try #require(ProcessCommandRunner().run("/bin/cat", [], input: Data("segredo\n".utf8), timeout: 5))

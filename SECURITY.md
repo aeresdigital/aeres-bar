@@ -10,7 +10,16 @@
 - **Nada em disco.** O cache (`~/Library/Application Support/AERES Bar/snapshots.json`) contém só números, datas e textos exibidos. Tokens e chaves nunca vão para o cache nem para os logs; os logs registram só o tipo de falha.
 - **Chaves do macOS.** Os itens do Chaves são lidos com `/usr/bin/security`, a mesma ferramenta com que o Claude Code grava o seu. Por isso não aparece pedido de acesso, nem depois de uma atualização do app.
 - **Certificado local.** O certificado autoassinado do language server do Antigravity é aceito apenas para `127.0.0.1`, `localhost` e `::1`.
-- **Sem telemetria.** O app não se comunica com nenhum outro servidor.
+- **Sem telemetria.** Além dos provedores, o app só fala com o GitHub, para as atualizações (abaixo), sem enviar nada seu.
+
+## Atualizações
+
+- **De onde vêm:** do repositório público [aeresdigital/aeres-bar-releases](https://github.com/aeresdigital/aeres-bar-releases), que só tem as versões publicadas pelo workflow de release. O app lê `releases/latest/download/update.json` em `github.com` e, quando você aceita, baixa o zip indicado ali. O zip precisa estar no mesmo endereço de origem do `update.json`: um `update.json` adulterado não consegue mandar o app baixar de outro lugar.
+- **Assinatura:** cada zip é assinado com Ed25519 no CI (`scripts/sign_update.swift`, segredo `UPDATE_SIGNING_KEY`). O app só instala se a assinatura conferir com a chave pública compilada nele (`UpdateFeed.publicKey`). Quem conseguir publicar no repositório de releases, ou trocar arquivos lá, ainda não consegue entregar código aos usuários sem a chave privada.
+- **Conferências antes de trocar:** o app descompacta a versão ao lado da instalada, confere o identificador (`com.aeresdigital.aeresbar`), se o número do build é o anunciado e maior que o instalado (sem voltar para versões antigas) e a assinatura de código (`codesign --verify --strict`).
+- **Troca:** um ajudante (`/bin/sh`, com os caminhos passados como argumentos, nunca dentro do texto do script) espera o app fechar, troca os apps e, se algo falhar, põe a versão anterior de volta e deixa um aviso para a próxima abertura.
+- **Quarentena:** um arquivo que o próprio app baixa não recebe a marca de quarentena, por isso a versão nova abre sem o aviso do Gatekeeper. É exatamente por isso que nada é instalado sem a assinatura conferir.
+- **Instalação pelo Terminal:** o `install.sh` publicado em cada versão baixa o zip por HTTPS, confere o checksum e a assinatura de código, e só então substitui o app. Ele vem do mesmo repositório de releases, então confia nele como confiaria no DMG.
 
 ## Relatando uma vulnerabilidade
 

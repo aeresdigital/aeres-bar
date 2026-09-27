@@ -2,22 +2,25 @@ import AERESBarCore
 import AppKit
 import Observation
 
-/// Wires the store, the settings, the menu bar and the system events together.
+/// Wires the store, the settings, the menu bar, the updater and the system events together.
 @MainActor
 public final class AppCoordinator {
     private let store: UsageStore
     private let settings: AppSettings
+    private let updater: AppUpdater?
     private let statusBar: StatusBarController
     private let events = SystemEventsMonitor()
     private var antigravityFollowUp: Task<Void, Never>?
 
-    public init(store: UsageStore, settings: AppSettings, secrets: any SecretStore) {
+    public init(store: UsageStore, settings: AppSettings, secrets: any SecretStore, updater: AppUpdater? = nil) {
         self.store = store
         self.settings = settings
+        self.updater = updater
         self.statusBar = StatusBarController(
             store: store,
             settings: settings,
-            settingsMenu: SettingsMenu(store: store, settings: settings, secrets: secrets)
+            updater: updater,
+            settingsMenu: SettingsMenu(store: store, settings: settings, secrets: secrets, updater: updater)
         )
     }
 
@@ -32,6 +35,7 @@ public final class AppCoordinator {
             onAntigravityLaunchOrQuit: { [weak self] in self?.refreshAntigravitySoon() }
         )
         LoginItem.enableOnFirstLaunch()
+        updater?.start()
         Log.app.notice("\(AppInfo.name, privacy: .public) \(AppInfo.version, privacy: .public) iniciado")
     }
 

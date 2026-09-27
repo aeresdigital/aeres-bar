@@ -12,7 +12,8 @@ flowchart TB
     subgraph UI["AERESBarUI (AppKit + SwiftUI)"]
         Coord["AppCoordinator"] --> Bar["StatusBarController<br/>um NSStatusItem"]
         Bar --> Panel["PanelController<br/>painel flutuante"]
-        Bar --> Menu["SettingsMenu<br/>+ APIKeyPrompt"]
+        Bar --> Menu["SettingsMenu<br/>+ APIKeyPrompt, UpdatePrompt"]
+        Panel --> Notice["UpdateNotice"]
         Coord --> Events["SystemEventsMonitor"]
         Brand["BrandMark / BrandImage / MeterImage<br/>marcas e medidor vetoriais"]
     end
@@ -21,12 +22,15 @@ flowchart TB
         Providers["Claude · Codex · Antigravity · Copilot · Ollama<br/>KeyedUsageProvider (OpenRouter, GLM, Kimi, MiniMax, DeepSeek)<br/>CommandUsageProvider (Qwen, Doubao)<br/>(actors)"] --> Infra["HTTPClient · CommandRunner · SecretStore<br/>GitHubTokenSource · JSONLTailReader"]
         Settings["AppSettings"]
         Presentation["BarPresenter · UsagePresentation"]
+        Updater["AppUpdater<br/>UpdateFeed · UpdateSignature<br/>BundleUpdateInstaller"]
     end
     Live --> Store
     Main --> Coord
     Coord --> Store
     Bar --> Presentation
     Panel --> Presentation
+    Coord --> Updater
+    Notice --> Updater
 ```
 
 As dependências andam numa só direção: `AERESBar → AERESBarUI → AERESBarCore`. O Core não importa AppKit nem SwiftUI, então tudo o que decide números e textos é testável em processo, sem sessão gráfica.
@@ -35,8 +39,8 @@ As dependências andam numa só direção: `AERESBar → AERESBarUI → AERESBar
 
 | Módulo | Responsabilidade | Principais tipos |
 | --- | --- | --- |
-| `AERESBarCore` | Modelos, leitura das fontes, estado e textos | `ProviderSnapshot`, `UsageWindow`, `UsageProvider`, `KeyedUsageProvider`, `CommandUsageProvider`, `FetchPolicy`, `UsageStore`, `AppSettings`, `SecretStore`, `BarPresenter`, `UsagePresentation`, `CLICommand` |
-| `AERESBarUI` | Tudo que aparece na tela | `AppCoordinator`, `StatusBarController`, `MeterImage`, `PanelController`, `ProviderSection`, `SettingsMenu`, `APIKeyPrompt`, `BrandMark`, `BrandImage`, `PreviewRenderer` |
+| `AERESBarCore` | Modelos, leitura das fontes, estado, atualização e textos | `ProviderSnapshot`, `UsageWindow`, `UsageProvider`, `KeyedUsageProvider`, `CommandUsageProvider`, `FetchPolicy`, `UsageStore`, `AppSettings`, `SecretStore`, `AppUpdater`, `UpdateFeed`, `BundleUpdateInstaller`, `BarPresenter`, `UsagePresentation`, `UpdatePresentation`, `CLICommand` |
+| `AERESBarUI` | Tudo que aparece na tela | `AppCoordinator`, `StatusBarController`, `MeterImage`, `PanelController`, `ProviderSection`, `UpdateNotice`, `SettingsMenu`, `APIKeyPrompt`, `UpdatePrompt`, `BrandMark`, `BrandImage`, `PreviewRenderer` |
 | `AERESBar` | Ponto de entrada e composição | `AERESBarApp`, `AppDelegate`, `LiveEnvironment`, `CommandLineTool` |
 
 ## Fluxo de dados
@@ -112,6 +116,32 @@ O endpoint `copilot_internal/user` é o mesmo que as extensões do Copilot usam 
 
 `OLLAMA_HOST` segue as regras do cliente do próprio Ollama: sem esquema, é http na porta 11434; com esquema, a porta padrão dele; host vazio é este Mac. A API da nuvem não informa quando as janelas renovam, então o painel não inventa uma contagem regressiva.
 
+## Atualização
+
+O código-fonte fica num repositório privado, então cada versão também vai para um repositório público só de releases, [aeresdigital/aeres-bar-releases](https://github.com/aeresdigital/aeres-bar-releases). É de lá que as pessoas instalam (DMG ou `install.sh`) e que os apps instalados se atualizam.
+
+```mermaid
+sequenceDiagram
+    participant CI as release.yml
+    participant Feed as aeres-bar-releases
+    participant App as AERES Bar instalado
+    participant Helper as swap.sh
+    CI->>Feed: DMG, zip, update.json assinado, install.sh
+    App->>Feed: update.json (ao abrir e a cada hora)
+    App->>App: build maior? mostra no painel e no menu
+    App->>Feed: zip (quando a pessoa aceita)
+    App->>App: assinatura Ed25519, ditto, identificador, build, codesign
+    App->>Helper: inicia e fecha
+    Helper->>Helper: espera o app sair, troca os apps (ou volta o anterior)
+    Helper->>App: abre a versão nova
+```
+
+- **Publicação** (`.github/workflows/release.yml`): um push na `main` que muda o app gera a versão `MAJOR.MINOR.build`, em que o build é a quantidade de commits na `main`. O app universal, o DMG e o zip saem dos mesmos scripts usados localmente (`build_app.sh`, `make_dmg.sh`, `make_update.sh`); o zip é assinado com a chave privada do segredo `UPDATE_SIGNING_KEY`, e a assinatura vai no `update.json`. Antes de publicar, o workflow confere que o feed não tem um build mais novo, para que uma execução repetida nunca faça uma versão velha virar a mais recente.
+- **Verificação** (`UpdateFeed`, `AppUpdater`): o app lê `releases/latest/download/update.json`. Só um build maior que o instalado, que rode neste macOS, vira oferta. As verificações automáticas não dizem nada quando falham (sem rede) nem sobre uma versão adiada com **Agora não**; **Procurar atualizações…** sempre responde.
+- **Instalação** (`BundleUpdateInstaller`): antes de baixar, confere se o app pode ser substituído onde está (não roda de uma cópia temporária do Gatekeeper nem de um disco somente leitura, a pasta aceita escrita e o macOS não protege o app). Depois de baixar, confere a assinatura Ed25519 do zip, descompacta com `ditto` numa pasta temporária no mesmo volume do app (a troca é um `rename`), e confere identificador, build e `codesign --verify --strict`. O ajudante é um script `sh` com os caminhos como argumentos; ele espera o processo do app terminar, troca os apps, põe o anterior de volta se a troca falhar e deixa um aviso (`update-failed`) que o app mostra ao abrir.
+- **Estado** (`AppUpdater`, `@Observable`): `idle`, `checking`, `available`, `downloading`, `installing` e `failed`. O aviso do painel (`UpdateNotice`) e o menu leem só esse estado; os textos vêm de `UpdatePresentation`.
+- **Por que não o Sparkle:** o app não tem dependências de runtime e é montado pelo SwiftPM, sem projeto Xcode; embutir o framework do Sparkle e os serviços XPC dele exigiria outro processo de empacotamento e assinatura. O que o app precisa (um feed, uma assinatura e uma troca segura) cabe em poucos tipos testáveis, o mesmo modelo do AERES Clips.
+
 ## Leitura incremental de logs
 
 Os logs do Claude Code passam fácil de 1 GB por semana. Para não reler tudo:
@@ -131,6 +161,7 @@ Resultado medido num Mac com Apple Silicon: a primeira leitura, de 1,8 GB (493 a
 - `UsageStore`, `AppSettings` e toda a UI são `@MainActor`. Os provedores são `actor`s e donos exclusivos de seus leitores de log e do seu `FetchState`, que não são thread-safe e não precisam ser.
 - Temporizadores são `Task`s com `Task.sleep` (canceláveis), não `Timer`.
 - Estado compartilhado fora de atores usa `OSAllocatedUnfairLock`, como na drenagem de pipes do `ProcessCommandRunner`. Um processo filho com saída grande não trava porque stdout e stderr são drenados em paralelo, e a drenagem começa antes de a entrada padrão ser escrita.
+- A drenagem roda em threads próprias, não nas filas globais: quem chama o `ProcessCommandRunner` espera bloqueado (os provedores são atores, então numa thread do Swift concurrency), e quando todas as threads desse pool esperam, o sistema não cria thread para o que está nas filas globais. Com drenagem nas filas, bastavam tantos comandos simultâneos quanto núcleos para todos esperarem até o limite de tempo; um teste roda o dobro disso em paralelo.
 
 ## Interface
 
@@ -151,7 +182,8 @@ Resultado medido num Mac com Apple Silicon: a primeira leitura, de 1,8 GB (493 a
 | Modelos chineses | Respostas reais ou documentadas de cada plataforma (GLM créditos e antigo, Kimi Code internacional e China, saldos, MiniMax atual e antigo, saída do `arkcli` e do `bl`), cada serviço com seu endereço, cabeçalho e região |
 | Infraestrutura | Entrada padrão dos processos, gravação de chaves sem argumentos, busca do login do GitHub, `OLLAMA_HOST` |
 | Estado | Store (coalescência, paralelismo, provedores desligados, leitura manual, persistência), cache em disco, preferências |
-| UI | Parser SVG, renderização das marcas (cobertura de pixels), medidor (pixels por barra), anéis do resumo (pixels do arco e do trilho), painel resumido e aberto via `ImageRenderer`, menu de ajustes e de chaves |
+| Atualização | Manifesto (`update.json`), feed e origem do zip, assinatura Ed25519, alvo substituível (cópia do Gatekeeper, pasta sem permissão, app protegido), pacotes inválidos, de outro app, antigos ou adulterados (com `ditto` e `codesign` de verdade), o ajudante trocando os apps e voltando o anterior, estados do `AppUpdater` e textos |
+| UI | Parser SVG, renderização das marcas (cobertura de pixels), medidor (pixels por barra), anéis do resumo (pixels do arco e do trilho), painel resumido e aberto via `ImageRenderer`, aviso de atualização em cada fase, menu de ajustes, de chaves e de atualização |
 
 A cobertura mínima é aplicada no CI (`scripts/coverage.sh`).
 
@@ -170,3 +202,7 @@ A cobertura mínima é aplicada no CI (`scripts/coverage.sh`).
 | SiliconFlow fora | A API de saldo foi desligada na China em 2026-08-14 e informa saldos zerados no site internacional |
 | Buffer mapeado (`mmap`) na leitura dos logs | Memória devolvida ao sistema na hora: sem blocos retidos por *autorelease* ou pelo cache do `malloc` (`malloc_zone_pressure_relief` não os devolvia) |
 | Imagens do README com dados de exemplo | Determinísticas e sem expor o uso de ninguém |
+| Repositório público só de releases | O código continua privado, e os instaladores e o `update.json` ficam num endereço público e estável (`releases/latest/download/…`) |
+| Build = commits na `main` | Determinístico (o mesmo commit gera o mesmo número, local ou no CI) e sempre crescente, porque a `main` não aceita *force push*; não depende do nome do workflow, como o número da execução dependeria |
+| Assinatura Ed25519 própria sobre o zip | Sem Developer ID, a assinatura de código é ad-hoc e não identifica o autor; a chave das atualizações sim. Um token de publicação vazado não basta para entregar código |
+| Atualizador próprio, sem o Sparkle | Mantém o app sem dependências e o empacotamento no SwiftPM (veja [Atualização](#atualização)) |

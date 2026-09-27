@@ -27,6 +27,8 @@ enum AERESBarApp {
             CommandLineTool.setKey(account)
         case .deleteKey(let account):
             CommandLineTool.deleteKey(account)
+        case .checkUpdate:
+            CommandLineTool.checkUpdate()
         case .version:
             print("\(AppInfo.name) \(AppInfo.version) (\(AppInfo.build))")
         case .help:
@@ -56,7 +58,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let coordinator = AppCoordinator(
             store: LiveEnvironment.makeStore(persistent: true, enabled: Set(settings.enabledProviders)),
             settings: settings,
-            secrets: LiveEnvironment.secrets
+            secrets: LiveEnvironment.secrets,
+            updater: LiveEnvironment.makeUpdater()
         )
         coordinator.start()
         self.coordinator = coordinator
