@@ -4,11 +4,21 @@ import Foundation
 public enum SecretAccount: String, CaseIterable, Sendable {
     case openRouter = "openrouter"
     case ollama = "ollama"
+    case glm = "glm"
+    case kimiCode = "kimi-code"
+    case moonshot = "moonshot"
+    case minimax = "minimax"
+    case deepseek = "deepseek"
 
     public var provider: ProviderID {
         switch self {
         case .openRouter: .openrouter
         case .ollama: .ollama
+        case .glm: .glm
+        case .kimiCode: .kimi
+        case .moonshot: .moonshot
+        case .minimax: .minimax
+        case .deepseek: .deepseek
         }
     }
 
@@ -16,22 +26,37 @@ public enum SecretAccount: String, CaseIterable, Sendable {
         switch self {
         case .openRouter: "OpenRouter"
         case .ollama: "Ollama Cloud"
+        case .glm: "GLM Coding Plan (Z.ai)"
+        case .kimiCode: "Kimi Code"
+        case .moonshot: "Kimi API"
+        case .minimax: "MiniMax Token Plan"
+        case .deepseek: "DeepSeek"
         }
     }
 
-    /// Environment variable the vendor's own tools read, used as a fallback.
-    public var environmentVariable: String {
+    /// Environment variables the vendors' own tools read, used as a fallback, in order.
+    public var environmentVariables: [String] {
         switch self {
-        case .openRouter: "OPENROUTER_API_KEY"
-        case .ollama: "OLLAMA_API_KEY"
+        case .openRouter: ["OPENROUTER_API_KEY"]
+        case .ollama: ["OLLAMA_API_KEY"]
+        case .glm: ["ZAI_API_KEY", "ZHIPUAI_API_KEY", "ZHIPU_API_KEY"]
+        case .kimiCode: ["KIMI_CODE_API_KEY"]
+        case .moonshot: ["MOONSHOT_API_KEY"]
+        case .minimax: ["MINIMAX_API_KEY", "MINIMAX_CODING_API_KEY"]
+        case .deepseek: ["DEEPSEEK_API_KEY"]
         }
     }
 
-    /// Where the user creates a key.
+    /// Where the user creates a key (the international site; mainland accounts use their own).
     public var keysPage: URL? {
         switch self {
         case .openRouter: URL(string: "https://openrouter.ai/settings/keys")
         case .ollama: URL(string: "https://ollama.com/settings/keys")
+        case .glm: URL(string: "https://z.ai/manage-apikey/apikey-list")
+        case .kimiCode: URL(string: "https://www.kimi.ai/code/console")
+        case .moonshot: URL(string: "https://platform.kimi.ai/console/api-keys")
+        case .minimax: URL(string: "https://platform.minimax.io/user-center/payment/token-plan")
+        case .deepseek: URL(string: "https://platform.deepseek.com/api_keys")
         }
     }
 
@@ -81,7 +106,7 @@ public struct KeychainSecretStore: SecretStore {
         )?.trimmedOutput {
             return stored
         }
-        return environment[account.environmentVariable].flatMap { $0.isEmpty ? nil : $0 }
+        return account.environmentVariables.lazy.compactMap { environment[$0] }.first { !$0.isEmpty }
     }
 
     public func setSecret(_ secret: String, for account: SecretAccount) throws {
@@ -102,9 +127,10 @@ public struct KeychainSecretStore: SecretStore {
         guard output.status == 0 || output.status == 44 else { throw SecretStoreError.keychainFailure }
     }
 
-    /// API keys are printable ASCII without whitespace or quotes (e.g. `sk-or-v1-…`).
+    /// API keys are printable ASCII without whitespace or quotes (e.g. `sk-or-v1-…`); some, like
+    /// MiniMax's, are long JWTs.
     static func isValid(_ key: String) -> Bool {
-        (8...512).contains(key.count)
+        (8...4_096).contains(key.count)
             && key.unicodeScalars.allSatisfy { $0.isASCII && $0.value > 32 && $0.value < 127 && $0 != "\"" && $0 != "\\" }
     }
 }

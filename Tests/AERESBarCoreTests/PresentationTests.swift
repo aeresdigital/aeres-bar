@@ -236,7 +236,7 @@ struct CLICommandTests {
             Issue.record("esperava erro para conta de chave desconhecida")
             return
         }
-        #expect(reason == "--set-key aceita openrouter ou ollama")
+        #expect(reason == "--set-key aceita " + SecretAccount.allCases.map(\.rawValue).joined(separator: " ou "))
         guard case .invalid = CLICommand.parse(["AERESBar", "--delete-key"]) else {
             Issue.record("esperava erro para conta ausente")
             return

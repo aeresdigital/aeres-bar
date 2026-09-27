@@ -28,10 +28,34 @@ public struct KeyedService: Sendable {
         }
     }
 
+    /// What came back from the service.
+    public struct Answer: Sendable {
+        public var main: Data
+        /// The extras that came back, in order (`nil` where one failed).
+        public var extras: [Data?]
+        /// The region that accepted the key: hosts and currencies differ between regions.
+        public var region: Region
+
+        public init(main: Data, extras: [Data?] = [], region: Region) {
+            self.main = main
+            self.extras = extras
+            self.region = region
+        }
+    }
+
+    /// A credential an official tool keeps on disk, used read-only when no key was saved.
+    public enum LocalCredential: Equatable, Sendable {
+        case token(String)
+        /// The tool's login expired; the tool renews it the next time it is used.
+        case expired(message: String)
+    }
+
     public var provider: ProviderID
     public var account: SecretAccount
-    /// The service's name in messages ("O DeepSeek pediu uma pausa…").
+    /// The service's name, for logs.
     public var name: String
+    /// How messages refer to it, with its article: "o DeepSeek", "a plataforma Kimi".
+    public var subject: String
     /// Where the numbers come from, for the panel.
     public var source: String
     public var regions: [Region]
@@ -39,38 +63,49 @@ public struct KeyedService: Sendable {
     public var request: @Sendable (_ base: URL, _ key: String) -> URLRequest
     /// Optional extras (a balance that needs another kind of key…): their failures are ignored.
     public var extras: @Sendable (_ base: URL, _ key: String) -> [URLRequest]
-    /// Reads the main answer and the extras that came back (`nil` where one failed); `nil` when
-    /// the main answer is not what the service should send.
-    public var read: @Sendable (_ main: Data, _ extras: [Data?], _ now: Date) -> KeyedReading?
-    /// Some APIs answer HTTP 200 with the error in the body.
-    public var errorInBody: @Sendable (_ body: Data) -> ProviderIssue.Kind?
+    /// Reads what came back; `nil` when the main answer is not what the service should send.
+    public var read: @Sendable (_ answer: Answer, _ now: Date) -> KeyedReading?
+    /// Some APIs answer HTTP 200 with the error in the body. `.unauthorized` makes the next
+    /// region be tried; other issues are shown with their own message.
+    public var errorInBody: @Sendable (_ body: Data) -> ProviderIssue?
+    /// Checked when no key was saved.
+    public var localCredential: @Sendable (_ now: Date) -> LocalCredential?
 
     public init(
         provider: ProviderID,
         account: SecretAccount,
         name: String,
+        subject: String? = nil,
         source: String,
         regions: [Region],
         request: @escaping @Sendable (_ base: URL, _ key: String) -> URLRequest,
         extras: @escaping @Sendable (_ base: URL, _ key: String) -> [URLRequest] = { _, _ in [] },
-        read: @escaping @Sendable (_ main: Data, _ extras: [Data?], _ now: Date) -> KeyedReading?,
-        errorInBody: @escaping @Sendable (_ body: Data) -> ProviderIssue.Kind? = { _ in nil }
+        read: @escaping @Sendable (_ answer: Answer, _ now: Date) -> KeyedReading?,
+        errorInBody: @escaping @Sendable (_ body: Data) -> ProviderIssue? = { _ in nil },
+        localCredential: @escaping @Sendable (_ now: Date) -> LocalCredential? = { _ in nil }
     ) {
         self.provider = provider
         self.account = account
         self.name = name
+        self.subject = subject ?? "o \(name)"
         self.source = source
         self.regions = regions
         self.request = request
         self.extras = extras
         self.read = read
         self.errorInBody = errorInBody
+        self.localCredential = localCredential
     }
 
     /// `GET` with `Authorization: Bearer <key>`, JSON accepted and AERES Bar's user agent.
     public static func get(_ url: URL, key: String, headers: [String: String] = [:]) -> URLRequest {
+        get(url, authorization: "Bearer \(key)", headers: headers)
+    }
+
+    /// `GET` with the `Authorization` header as given (some APIs take the raw key).
+    public static func get(_ url: URL, authorization: String, headers: [String: String] = [:]) -> URLRequest {
         var request = URLRequest(url: url)
-        request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+        request.setValue(authorization, forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(AppInfo.userAgent, forHTTPHeaderField: "User-Agent")
         for (field, value) in headers { request.setValue(value, forHTTPHeaderField: field) }
@@ -83,20 +118,15 @@ public struct KeyedService: Sendable {
 public actor KeyedUsageProvider: UsageProvider {
     public nonisolated let id: ProviderID
 
-    /// The raw answers, kept so that windows depending on the clock are recomputed every refresh.
-    struct Answers: Sendable {
-        var main: Data
-        var extras: [Data?]
-    }
-
     private let service: KeyedService
     private let http: any HTTPClient
     private let secrets: any SecretStore
     private let policy: FetchPolicy
     private let now: @Sendable () -> Date
-    private var state = FetchState<Answers>()
-    /// The key the cached answers belong to.
-    private var keyInUse: String?
+    /// The raw answers, kept so that windows depending on the clock are recomputed every refresh.
+    private var state = FetchState<KeyedService.Answer>()
+    /// Whose answers are cached: the saved key, or the tool's own login.
+    private var credentialInUse: String?
     /// The region that accepted the key.
     private var regionInUse: Int?
 
@@ -117,25 +147,34 @@ public actor KeyedUsageProvider: UsageProvider {
 
     public func snapshot(previous: ProviderSnapshot?, reason: RefreshReason) async -> ProviderSnapshot {
         let now = now()
-        let key = secrets.secret(for: service.account)
-        // Another key (or none) has other limits: forget what the previous one read.
-        let keyChanged = keyInUse != nil && key != keyInUse
-        if keyChanged || key == nil {
+        let saved = secrets.secret(for: service.account)
+        let local = saved == nil ? service.localCredential(now) : nil
+        var key = saved
+        if case .token(let token) = local { key = token }
+        // Another key (or none) has other limits: forget what the previous one read. The tool's
+        // own token rotates when it renews, but it is still the same account.
+        let credential = saved ?? (key == nil ? nil : "local")
+        let changed = credentialInUse != nil && credential != credentialInUse
+        if changed || credential == nil {
             state = FetchState()
             regionInUse = nil
         }
-        keyInUse = key
+        credentialInUse = credential
 
-        var snapshot = (keyChanged || key == nil ? nil : previous) ?? ProviderSnapshot(provider: id)
+        var snapshot = (changed || credential == nil ? nil : previous) ?? ProviderSnapshot(provider: id)
         snapshot.checkedAt = now
+        if case .expired(let message) = local {
+            snapshot.markFailed(ProviderIssue(.credentialsExpired, message))
+            return snapshot
+        }
         guard let key else {
-            snapshot.markFailed(ProviderIssue(.notInstalled, "Defina a chave da API do \(service.name) em Ajustes › Chaves de API."))
+            snapshot.markFailed(ProviderIssue(.notInstalled, "Defina a chave da API \(of) em Ajustes › Chaves de API."))
             return snapshot
         }
 
         switch await answers(key: key, now: now, reason: reason) {
         case .success(let fetch):
-            guard let reading = service.read(fetch.value.main, fetch.value.extras, now) else {
+            guard let reading = service.read(fetch.value, now) else {
                 snapshot.markFailed(invalidFormat)
                 return snapshot
             }
@@ -150,15 +189,30 @@ public actor KeyedUsageProvider: UsageProvider {
         return snapshot
     }
 
+    /// "O DeepSeek", for the start of a sentence.
+    private var subject: String {
+        service.subject.prefix(1).uppercased() + service.subject.dropFirst()
+    }
+
+    /// "do DeepSeek", "da plataforma Kimi".
+    private var of: String {
+        let words = service.subject
+        if words.hasPrefix("o ") { return "do " + words.dropFirst(2) }
+        if words.hasPrefix("a ") { return "da " + words.dropFirst(2) }
+        return "de " + words
+    }
+
     private var invalidFormat: ProviderIssue {
-        ProviderIssue(.invalidResponse, "O \(service.name) respondeu num formato inesperado.")
+        ProviderIssue(.invalidResponse, "\(subject) respondeu num formato inesperado.")
     }
 
     private var rateLimited: ProviderIssue {
-        ProviderIssue(.rateLimited, "O \(service.name) pediu uma pausa nas consultas — nova tentativa em alguns minutos.")
+        ProviderIssue(.rateLimited, "\(subject) pediu uma pausa nas consultas — nova tentativa em alguns minutos.")
     }
 
-    private func answers(key: String, now: Date, reason: RefreshReason) async -> Result<(value: Answers, at: Date), ProviderIssue> {
+    private func answers(
+        key: String, now: Date, reason: RefreshReason
+    ) async -> Result<(value: KeyedService.Answer, at: Date), ProviderIssue> {
         if let cached = state.reusable(now: now, reason: reason, policy: policy) { return .success(cached) }
         if state.isBackingOff(at: now) { return .failure(rateLimited) }
 
@@ -167,7 +221,8 @@ public actor KeyedUsageProvider: UsageProvider {
         var refused = false
         var unreachable = false
         for index in order {
-            guard let base = URL(string: service.regions[index].baseURL) else { continue }
+            let region = service.regions[index]
+            guard let base = URL(string: region.baseURL) else { continue }
             let response: HTTPResponse
             do {
                 response = try await http.send(service.request(base, key))
@@ -176,18 +231,18 @@ public actor KeyedUsageProvider: UsageProvider {
                 continue  // another region may be reachable from here
             }
             let bodyIssue = response.status == 200 ? service.errorInBody(response.body) : nil
-            switch (response.status, bodyIssue) {
+            switch (response.status, bodyIssue?.kind) {
             case (200, nil):
                 var extras: [Data?] = []
                 for request in service.extras(base, key) {
                     let answer = try? await http.send(request)
                     extras.append(answer?.status == 200 ? answer?.body : nil)
                 }
-                let answers = Answers(main: response.body, extras: extras)
-                guard service.read(answers.main, answers.extras, now) != nil else { return .failure(invalidFormat) }
+                let answer = KeyedService.Answer(main: response.body, extras: extras, region: region)
+                guard service.read(answer, now) != nil else { return .failure(invalidFormat) }
                 regionInUse = index
-                state.record(answers, at: now)
-                return .success((answers, now))
+                state.record(answer, at: now)
+                return .success((answer, now))
             case (401, _), (403, _), (200, .unauthorized):
                 refused = true
                 continue  // the key may belong to another region
@@ -195,19 +250,19 @@ public actor KeyedUsageProvider: UsageProvider {
                 state.retryAfter = policy.backoffDeadline(from: response, now: now)
                 return .failure(rateLimited)
             case (200, _):
-                return .failure(invalidFormat)
+                return .failure(bodyIssue ?? invalidFormat)
             default:
                 return .failure(
-                    ProviderIssue(.invalidResponse, "O \(service.name) respondeu HTTP \(response.status). Mostrando os últimos dados.")
+                    ProviderIssue(.invalidResponse, "\(subject) respondeu HTTP \(response.status). Mostrando os últimos dados.")
                 )
             }
         }
         regionInUse = nil  // a revoked key or a new network: look everywhere next time
         if refused {
-            return .failure(ProviderIssue(.unauthorized, "A chave do \(service.name) foi recusada — confira em Ajustes › Chaves de API."))
+            return .failure(ProviderIssue(.unauthorized, "A chave \(of) foi recusada — confira em Ajustes › Chaves de API."))
         }
         if unreachable {
-            return .failure(ProviderIssue(.network, "Sem conexão com o \(service.name). Mostrando os últimos dados."))
+            return .failure(ProviderIssue(.network, "Sem conexão com \(service.subject). Mostrando os últimos dados."))
         }
         return .failure(invalidFormat)
     }

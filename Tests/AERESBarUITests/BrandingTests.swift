@@ -8,7 +8,7 @@ import Testing
 @Suite("Parser de caminhos SVG")
 struct SVGPathTests {
     @Test(
-        "As seis marcas oficiais são lidas e cabem na sua viewBox",
+        "As marcas oficiais são lidas e cabem na sua viewBox",
         arguments: [
             (ProviderID.claude, CGRect(x: 0, y: 0, width: 24, height: 24)),
             (.codex, CGRect(x: 0, y: 0, width: 24, height: 24)),
@@ -16,6 +16,13 @@ struct SVGPathTests {
             (.copilot, CGRect(x: 0, y: 0, width: 24, height: 24)),
             (.ollama, CGRect(x: 0, y: 0, width: 24, height: 24)),
             (.openrouter, CGRect(x: 0, y: 0, width: 24, height: 24)),
+            (.glm, CGRect(x: 0, y: 0, width: 24, height: 24)),
+            (.kimi, CGRect(x: 0, y: 0, width: 24, height: 24)),
+            (.moonshot, CGRect(x: 0, y: 0, width: 24, height: 24)),
+            (.minimax, CGRect(x: 0, y: 0, width: 24, height: 24)),
+            (.deepseek, CGRect(x: 0, y: 0, width: 24, height: 24)),
+            (.qwen, CGRect(x: 0, y: 0, width: 24, height: 24)),
+            (.doubao, CGRect(x: 0, y: 0, width: 24, height: 24)),
         ])
     func officialMarks(provider: ProviderID, viewBox: CGRect) throws {
         let parts = try BrandMark.pathData(for: provider).map(SVGPath.parse)
@@ -93,16 +100,23 @@ struct BrandImageTests {
         let rep = try #require(BrandImage.render(provider, pointSize: 16, scale: 2))
         #expect(rep.pixelsWide == 32 && rep.pixelsHigh == 32)
         var inked = 0
-        var edgeTouched = false
+        var columns: Set<Int> = []
+        var rows: Set<Int> = []
         for y in 0..<rep.pixelsHigh {
-            for x in 0..<rep.pixelsWide where (rep.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.5 {
-                inked += 1
-                if x == 0 || y == 0 || x == rep.pixelsWide - 1 || y == rep.pixelsHigh - 1 { edgeTouched = true }
+            for x in 0..<rep.pixelsWide {
+                let alpha = rep.colorAt(x: x, y: y)?.alphaComponent ?? 0
+                if alpha > 0.5 { inked += 1 }
+                if alpha > 0.1 {
+                    columns.insert(x)
+                    rows.insert(y)
+                }
             }
         }
         let share = Double(inked) / Double(rep.pixelsWide * rep.pixelsHigh)
         #expect(share > 0.12 && share < 0.75, "cobertura \(share)")
-        #expect(edgeTouched, "a marca deve preencher o quadro")
+        // Pointed marks (Z.ai's slanted Z) reach the edges only at their tips: measure the ink's extent.
+        let extent = max((columns.max() ?? 0) - (columns.min() ?? 0), (rows.max() ?? 0) - (rows.min() ?? 0)) + 1
+        #expect(extent >= rep.pixelsWide * 9 / 10, "a marca deve preencher o quadro (\(extent) px)")
     }
 
     @Test("Cores de marca e de alerta")
@@ -219,6 +233,16 @@ struct PanelRenderingTests {
             let image = try #require(NSImage(contentsOf: file))
             #expect(image.size.width > 0)
         }
+        // The content below the header is really drawn (a ScrollView would come out blank).
+        let rendered = try #require(NSBitmapImageRep(data: try Data(contentsOf: folder.appendingPathComponent("panel-light.png"))))
+        var ink = 0
+        for y in stride(from: 140, to: rendered.pixelsHigh, by: 2) {
+            for x in stride(from: 0, to: rendered.pixelsWide, by: 2) {
+                guard let color = rendered.colorAt(x: x, y: y)?.usingColorSpace(.sRGB) else { continue }
+                if color.alphaComponent > 0.5 && color.brightnessComponent < 0.5 { ink += 1 }
+            }
+        }
+        #expect(ink > 500, "o conteúdo abaixo do cabeçalho deve aparecer (\(ink) pontos escuros)")
         let panel = try #require(NSImage(contentsOf: folder.appendingPathComponent("panel-dark.png")))
         let expanded = try #require(NSImage(contentsOf: folder.appendingPathComponent("panel-expanded-dark.png")))
         #expect(panel.representations.first?.pixelsWide == Int(PanelRootView.width * 2))
@@ -256,19 +280,22 @@ struct PanelRenderingTests {
 @Suite("Dados de exemplo")
 @MainActor
 struct DemoDataTests {
-    @Test("Cobrem os seis provedores e os estados de alerta")
+    @Test("Cobrem provedores de todo tipo e os estados de alerta")
     func demoStore() async {
         let store = DemoData.store()
         await store.refreshAllAndWait()
-        #expect(store.providerIDs == ProviderID.allCases)
-        for provider in ProviderID.allCases {
+        let demo = DemoData.snapshots(now: Date()).map(\.provider)
+        #expect(store.providerIDs == ProviderID.allCases.filter(demo.contains))
+        #expect(demo.contains(.glm) && demo.contains(.kimi) && demo.contains(.deepseek))
+        for provider in demo {
             #expect(store.snapshots[provider]?.status == .ok)
-            #expect(store.snapshots[provider]?.windows.isEmpty == false)
+            // Balance-only services (DeepSeek) have details instead of limits.
+            #expect(store.snapshots[provider]?.windows.isEmpty == false || store.snapshots[provider]?.details.isEmpty == false)
         }
         let alerts = ProviderID.allCases.compactMap { BarPresenter.value(for: store.snapshots[$0], config: .init(), now: Date()).alert }
         #expect(alerts == [.warning, .critical])
         let overall = BarPresenter.overall(for: store.snapshots, providers: store.providerIDs, config: .init(), now: Date())
         #expect(overall.critical == .antigravity)
-        #expect(overall.levels.count == 6)
+        #expect(overall.levels.count == demo.count - 1)  // DeepSeek reports a balance, not a limit
     }
 }

@@ -43,6 +43,13 @@ public struct ProcessCommandRunner: CommandRunner {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
+        // Scripts started with `#!/usr/bin/env node` look their interpreter up in PATH, and a GUI
+        // app's PATH is minimal: add the tool's own folder (nvm keeps node next to it) and the
+        // usual install folders.
+        var environment = ProcessInfo.processInfo.environment
+        let folders = [URL(fileURLWithPath: executable).deletingLastPathComponent().path, "/opt/homebrew/bin", "/usr/local/bin"]
+        environment["PATH"] = (folders + [environment["PATH"] ?? "/usr/bin:/bin:/usr/sbin:/sbin"]).joined(separator: ":")
+        process.environment = environment
         let outPipe = Pipe()
         let errPipe = Pipe()
         let inPipe = Pipe()

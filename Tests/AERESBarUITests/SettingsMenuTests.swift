@@ -64,8 +64,8 @@ struct SettingsMenuTests {
             cleanUp()
         }
         let keys = try submenu("Chaves de API", in: menu)
-        #expect(keys.items.map(\.title) == ["OpenRouter", "Ollama Cloud"])
-        #expect(keys.items.map(\.state) == [.on, .off])
+        #expect(keys.items.map(\.title) == SecretAccount.allCases.map(\.displayName))
+        #expect(keys.items.map(\.state) == SecretAccount.allCases.map { $0 == .openRouter ? .on : .off })
         #expect(keys.items.allSatisfy { $0.image != nil })
 
         let openRouter = try #require(keys.items.first?.submenu)
@@ -75,7 +75,7 @@ struct SettingsMenuTests {
             ])
         #expect(try item("Remover a chave", in: openRouter).isEnabled)
 
-        let ollama = try #require(keys.items.last?.submenu)
+        let ollama = try #require(keys.items.first { $0.title == "Ollama Cloud" }?.submenu)
         #expect(ollama.items.first?.title == "Nenhuma chave definida")
         #expect(try item("Definir a chave…", in: ollama).isEnabled)
         #expect(!(try item("Remover a chave", in: ollama).isEnabled))

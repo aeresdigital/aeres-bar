@@ -15,7 +15,7 @@ pkill -x AERESBar 2>/dev/null || true
 
 rm -rf "$APP" "$HOME/Library/Application Support/AERES Bar"
 defaults delete "$BUNDLE_ID" >/dev/null 2>&1 || true
-for account in openrouter ollama; do
+for account in openrouter ollama glm kimi-code moonshot minimax deepseek; do
   security delete-generic-password -s "$KEYCHAIN_SERVICE" -a "$account" >/dev/null 2>&1 || true
 done
 echo "✓ AERES Bar removido"

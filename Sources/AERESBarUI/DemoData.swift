@@ -157,7 +157,47 @@ public enum DemoData {
             checkedAt: now,
             source: "API do OpenRouter"
         )
-        return [claude, codex, antigravity, copilot, ollama, openRouter]
+        let glm = ProviderSnapshot(
+            provider: .glm,
+            status: .ok,
+            plan: "Pro",
+            windows: [
+                UsageWindow(
+                    id: "glm.session", title: "Sessão (5h)", subtitle: "4.200 de 12.000 créditos", usedPercent: 35, resetsAt: hours(3.1),
+                    windowSeconds: 18_000, isPrimary: true),
+                UsageWindow(
+                    id: "glm.weekly", title: "Semanal", subtitle: "13.200 de 60.000 créditos", usedPercent: 22, resetsAt: hours(76),
+                    windowSeconds: week),
+            ],
+            limitsUpdatedAt: fresh,
+            checkedAt: now,
+            source: "API do GLM Coding Plan"
+        )
+
+        let kimi = ProviderSnapshot(
+            provider: .kimi,
+            status: .ok,
+            plan: "Allegretto",
+            windows: [
+                UsageWindow(
+                    id: "kimi.session", title: "Sessão (5h)", usedPercent: 12, resetsAt: hours(1.4), windowSeconds: 18_000, isPrimary: true),
+                UsageWindow(id: "kimi.weekly", title: "Semanal", usedPercent: 48, resetsAt: hours(52), windowSeconds: week),
+            ],
+            details: [DetailRow(label: "Kimi Code na cota mensal", value: "31%")],
+            limitsUpdatedAt: fresh,
+            checkedAt: now,
+            source: "API do Kimi Code"
+        )
+
+        let deepSeek = ProviderSnapshot(
+            provider: .deepseek,
+            status: .ok,
+            details: [DetailRow(label: "Saldo", value: "US$ 18,40 (US$ 15,00 recarregado + US$ 3,40 de bônus)")],
+            limitsUpdatedAt: fresh,
+            checkedAt: now,
+            source: "API do DeepSeek"
+        )
+        return [claude, codex, antigravity, copilot, ollama, openRouter, glm, kimi, deepSeek]
     }
 }
 

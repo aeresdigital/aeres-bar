@@ -242,8 +242,9 @@ struct PersistenceTests {
         settings.showPercentInBar = false
         settings.showRemaining = true
         settings.refreshInterval = 300
+        let last = try #require(ProviderID.allCases.last)
         for provider in ProviderID.allCases { settings.setEnabled(provider, false) }
-        #expect(settings.enabledProviders == [.openrouter])  // the last one stays on
+        #expect(settings.enabledProviders == [last])  // the last one stays on
 
         let reloaded = AppSettings(defaults: defaults)
         #expect(reloaded.barMetric == .weekly)
@@ -251,12 +252,12 @@ struct PersistenceTests {
         #expect(!reloaded.showPercentInBar)
         #expect(reloaded.showRemaining)
         #expect(reloaded.refreshInterval == 300)
-        #expect(reloaded.disabledProviders == Set(ProviderID.allCases).subtracting([.openrouter]))
+        #expect(reloaded.disabledProviders == Set(ProviderID.allCases).subtracting([last]))
         #expect(reloaded.barConfig == BarPresenter.Config(metric: .weekly, showRemaining: true, showCountdown: false))
 
         reloaded.setEnabled(.codex, true)
         #expect(reloaded.isEnabled(.codex))
-        #expect(reloaded.enabledProviders == [.codex, .openrouter])
+        #expect(reloaded.enabledProviders == [.codex, last])
     }
 
     @Test("Valores inválidos gravados voltam ao padrão")
