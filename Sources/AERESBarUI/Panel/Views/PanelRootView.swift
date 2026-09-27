@@ -24,6 +24,7 @@ struct PanelRootView: View {
         let providers = store.providerIDs
         let shown = providers.filter { store.snapshots[$0]?.status != .notInstalled }
         let absent = providers.filter { store.snapshots[$0]?.status == .notInstalled }
+        let rings = UsagePresentation.summaryRings(for: store.snapshots, providers: shown, config: settings.barConfig, now: now)
         return VStack(spacing: 0) {
             PanelHeader(
                 subtitle: UsagePresentation.updatedLine(for: providers.compactMap { store.snapshots[$0] }, now: now),
@@ -31,6 +32,10 @@ struct PanelRootView: View {
                 actions: actions
             )
             Divider().opacity(0.6)
+            if !rings.isEmpty {
+                SummaryRow(rings: rings, expanded: state.expanded) { state.toggle($0) }
+                Divider().opacity(0.6)
+            }
             if shown.isEmpty {
                 Text("Nenhum provedor encontrado neste Mac.")
                     .font(.system(size: 11.5))

@@ -21,7 +21,7 @@
 
 <table align="center">
   <tr>
-    <td><img src="docs/images/panel-dark.png" width="340" alt="Painel com os seis provedores resumidos"></td>
+    <td><img src="docs/images/panel-dark.png" width="340" alt="Painel com o resumo em anéis e os seis provedores"></td>
     <td><img src="docs/images/panel-expanded-light.png" width="340" alt="Painel com os detalhes do Claude Code abertos"></td>
   </tr>
 </table>
@@ -50,10 +50,10 @@
 - **Um só item na barra de menus**, para ocupar pouco espaço: um medidor com uma barra por provedor, cheia até o uso de cada um, e ao lado a porcentagem do provedor mais perto do limite. Dá para trocar o medidor pelo logo do provedor mais crítico ou esconder o número e deixar só o ícone.
 - **Número configurável:** limite mais crítico (padrão), janela principal, semanal ou tokens de hoje (somados); em % usada ou restante; com contagem regressiva opcional (`74% · 3d12h`).
 - **Alertas visuais:** o número fica laranja a partir de 80% e vermelho a partir de 95%.
-- **Painel ao passar o mouse** com todos os provedores de uma vez. Cada janela de limite ocupa uma linha, com barra de progresso, % usado e quanto falta para renovar. Clicar num provedor abre os detalhes:
-  - quanto falta para renovar e quando: `Renova em 1h 17min · hoje às 05:10`;
-  - tokens gastos na sessão, hoje e na semana (entrada, saída, cache lido e gravado, respostas);
-  - plano da conta, uso extra, divisão do uso semanal por produto, cota por modelo, gasto e saldo.
+- **Painel ao passar o mouse** com todos os provedores de uma vez:
+  - no topo, um **resumo em anéis no estilo do Apple Watch**: um anel por provedor, com o logo no centro e a porcentagem embaixo, verde até 79%, laranja a partir de 80% e vermelho a partir de 95%;
+  - abaixo, cada janela de limite numa linha, com barra de progresso, % usado e quanto falta para renovar;
+  - clicar num anel ou num provedor abre os detalhes: quando renova (`Renova em 1h 17min · hoje às 05:10`), tokens da sessão, do dia e da semana (entrada, saída, cache lido e gravado, respostas), plano, uso extra, uso semanal por produto, cota por modelo, gasto e saldo.
 - **Seis provedores:** Claude Code, Codex, Antigravity, GitHub Copilot, Ollama (Cloud e servidor local) e OpenRouter. Cada um pode ser desligado no menu; os que não estão configurados aparecem no rodapé do painel, com um atalho para configurar.
 - **Clique** fixa o painel (fecha com clique fora ou Esc). **Clique direito** abre os ajustes.
 - **Atualização automática** a cada 1–10 min, ao acordar o Mac e quando o Antigravity abre ou fecha. **Atualizar agora** (no painel ou no menu) consulta as APIs na hora. Um dado já lido nunca some: sem conexão ou com a ferramenta fechada, o painel mostra a última leitura e zera as janelas cujo horário de renovação já passou.
@@ -106,7 +106,7 @@ Desliga a abertura no login, encerra o app e apaga o app, o cache, as preferênc
 | Gesto | Resultado |
 | --- | --- |
 | Passar o mouse sobre o item | Abre o painel com todos os provedores |
-| Clicar num provedor no painel | Abre ou fecha os detalhes dele |
+| Clicar num anel ou num provedor no painel | Abre ou fecha os detalhes dele |
 | Clique no item | Fixa o painel; clique fora ou Esc fecha |
 | Clique direito (ou ⌃-clique) | Menu de ajustes |
 | ⌘-arrastar o item | Muda a posição dele na barra (posição salva) |

@@ -10,6 +10,7 @@ Todas as mudanças relevantes do AERES Bar. O formato segue o [Keep a Changelog]
 - Ollama: limites de sessão (5 h) e semanal do Ollama Cloud, com a chave da API, e o servidor local com a versão e os modelos carregados.
 - OpenRouter: limite de gasto da chave (diário, semanal, mensal ou fixo), cota diária de modelos gratuitos, gasto do dia, da semana e do mês e saldo de créditos (com chave de gerenciamento).
 - Chaves de API do OpenRouter e do Ollama Cloud no menu de ajustes (definir, trocar, remover e criar no site) e na linha de comando (`--set-key`, `--delete-key`), guardadas no Chaves do macOS.
+- Resumo no topo do painel com um anel por provedor, no estilo do Apple Watch: logo no centro, porcentagem embaixo e cor pelo nível de alerta. Clicar num anel abre os detalhes do provedor.
 - Menu **Provedores** para ligar e desligar cada provedor, e rodapé no painel com os que faltam configurar.
 - Ajustes **Ícone na barra** (medidores ou logo do mais crítico) e **Mostrar o número ao lado do ícone**.
 

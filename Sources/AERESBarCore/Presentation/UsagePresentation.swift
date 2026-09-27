@@ -137,3 +137,54 @@ public enum UsagePresentation {
         "\(window.title): \(Formatting.percent(window.effectiveUsed(at: now))) usado. \(resetDescription(for: window, now: now))"
     }
 }
+
+/// One ring of the summary row at the top of the panel.
+public struct SummaryRing: Equatable, Identifiable, Sendable {
+    public var provider: ProviderID
+    /// How much of the ring is filled, from 0 to 1; `nil` while there is nothing to show.
+    public var fraction: Double?
+    /// "74%", or "…" while loading and "–" without data.
+    public var text: String
+    public var alert: AlertLevel?
+    /// What the ring stands for, for the tooltip and VoiceOver.
+    public var description: String
+
+    public var id: ProviderID { provider }
+}
+
+extension UsagePresentation {
+    /// The summary row: one ring per provider with limits, the same ones and numbers as the menu
+    /// bar meter. A ring fills up to the percentage shown under it (used, or left when the user
+    /// prefers that); its color comes from the usage alert.
+    public static func summaryRings(
+        for snapshots: [ProviderID: ProviderSnapshot],
+        providers: [ProviderID],
+        config: BarPresenter.Config,
+        now: Date
+    ) -> [SummaryRing] {
+        // Rings are percentages: token counts and countdowns stay in the menu bar.
+        var ringConfig = config
+        if ringConfig.metric == .tokensToday { ringConfig.metric = .mostCritical }
+        ringConfig.showCountdown = false
+
+        let levels = BarPresenter.overall(for: snapshots, providers: providers, config: ringConfig, now: now).levels
+        return levels.map { level in
+            let snapshot = snapshots[level.provider]
+            let value = BarPresenter.value(for: snapshot, config: ringConfig, now: now)
+            let shown = value.usedPercent.map { config.showRemaining ? 100 - $0 : $0 }
+            let description: String
+            if let window = value.window {
+                description = "\(level.provider.displayName) · \(accessibilityLabel(for: window, now: now))"
+            } else {
+                description = "\(level.provider.displayName): \(snapshot?.status == .loading ? "carregando" : "sem dados")"
+            }
+            return SummaryRing(
+                provider: level.provider,
+                fraction: shown.map { min(max($0 / 100, 0), 1) },
+                text: value.text,
+                alert: value.alert,
+                description: description
+            )
+        }
+    }
+}

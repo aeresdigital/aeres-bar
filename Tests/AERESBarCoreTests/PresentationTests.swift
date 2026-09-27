@@ -350,3 +350,66 @@ struct OverallBarTests {
         #expect(BarIconStyle.allCases.allSatisfy { !$0.title.isEmpty })
     }
 }
+
+@Suite("Resumo em anéis do painel")
+struct SummaryRingTests {
+    let now = Date(timeIntervalSince1970: 1_790_000_000)
+
+    private func snapshot(_ provider: ProviderID, _ used: Double, title: String = "Semanal") -> ProviderSnapshot {
+        ProviderSnapshot(
+            provider: provider,
+            status: .ok,
+            windows: [
+                UsageWindow(id: "w", title: title, usedPercent: used, resetsAt: now.addingTimeInterval(7_200), windowSeconds: 604_800)
+            ],
+            tokens: TokenSummary(today: TokenCounts(input: 5_000))
+        )
+    }
+
+    @Test("Um anel por provedor com limites, na ordem e com os números da barra")
+    func rings() {
+        let snapshots = [
+            ProviderID.claude: snapshot(.claude, 15),
+            .codex: snapshot(.codex, 0),
+            .antigravity: snapshot(.antigravity, 97),
+            .copilot: ProviderSnapshot(provider: .copilot, status: .notInstalled),
+            .ollama: ProviderSnapshot(provider: .ollama, status: .ok),  // local models only: no limits
+        ]
+        let rings = UsagePresentation.summaryRings(
+            for: snapshots, providers: [.claude, .codex, .antigravity, .copilot, .ollama], config: .init(), now: now)
+        #expect(rings.map(\.provider) == [.claude, .codex, .antigravity])
+        #expect(rings.map(\.text) == ["15%", "0%", "97%"])
+        #expect(rings.map(\.fraction) == [0.15, 0, 0.97])
+        #expect(rings.map(\.alert) == [nil, nil, .critical])
+        // The time of day that follows depends on the machine's time zone.
+        #expect(rings.first?.description.hasPrefix("Claude Code · Semanal: 15% usado. Renova em 2h · ") == true)
+    }
+
+    @Test("Com % restante, o anel mostra o que sobra; o alerta continua vindo do uso")
+    func remaining() {
+        let rings = UsagePresentation.summaryRings(
+            for: [.codex: snapshot(.codex, 86)], providers: [.codex], config: .init(showRemaining: true, showCountdown: true), now: now)
+        #expect(rings.first?.text == "14%")  // no countdown under a ring
+        #expect(abs((rings.first?.fraction ?? 0) - 0.14) < 1e-9)
+        #expect(rings.first?.alert == .warning)
+    }
+
+    @Test("Tokens de hoje na barra: os anéis continuam em porcentagem")
+    func tokensMetric() {
+        let rings = UsagePresentation.summaryRings(
+            for: [.claude: snapshot(.claude, 40)], providers: [.claude], config: .init(metric: .tokensToday), now: now)
+        #expect(rings.first?.text == "40%")
+        #expect(rings.first?.fraction == 0.4)
+    }
+
+    @Test("Enquanto carrega, o anel fica vazio")
+    func loading() {
+        let rings = UsagePresentation.summaryRings(
+            for: [.openrouter: ProviderSnapshot(provider: .openrouter)], providers: [.openrouter], config: .init(), now: now)
+        #expect(rings.count == 1)
+        #expect(rings.first?.fraction == nil)
+        #expect(rings.first?.text == "…")
+        #expect(rings.first?.description == "OpenRouter: carregando")
+        #expect(UsagePresentation.summaryRings(for: [:], providers: [], config: .init(), now: now).isEmpty)
+    }
+}
