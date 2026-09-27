@@ -2,10 +2,16 @@
 
 Todas as mudanças relevantes do AERES Bar. O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto usa [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
-## [Não publicado]
+Cada merge na `main` que muda o app vira uma versão publicada automaticamente: `MAJOR.MINOR` do arquivo `VERSION` mais o número do build (`1.0.23`). As notas de cada versão, geradas das mensagens de commit, ficam nas [Releases](https://github.com/aeresdigital/aeres-bar-releases/releases) e aparecem no próprio app. Este arquivo resume cada série (`1.0`, `1.1`…): ao mudar `VERSION`, abra uma seção nova.
+
+## [1.0] - publicação contínua, desde 2026-09-27
 
 ### Adicionado
 
+- Versões publicadas a cada merge na `main`, no repositório público [aeresdigital/aeres-bar-releases](https://github.com/aeresdigital/aeres-bar-releases): DMG, instalador pelo Terminal (`curl … | sh`, sem o aviso de quarentena do macOS) e o pacote de atualização assinado.
+- Atualização pelo próprio app: procura ao abrir, a cada hora e em **Procurar atualizações…**; a versão nova aparece no topo do painel e no menu, e um clique baixa, confere a assinatura Ed25519 e a de código, troca o app e o abre de novo. Se a troca falhar, a versão anterior volta.
+- `--check-update` na linha de comando: compara a versão instalada com a publicada.
+- Licença [PolyForm Noncommercial 1.0.0](LICENSE) (uso não comercial) e os avisos de terceiros das marcas ([THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)), que também vão dentro do app.
 - Modelos chineses, cada um pela fonte mais confiável que existe:
   - **GLM (Z.ai / Zhipu):** sessão de 5 h, semana e cota mensal de ferramentas MCP do GLM Coding Plan.
   - **Kimi Code:** sessão de 5 h, semana e mês da assinatura, com o login do Kimi Code CLI ou uma chave do console.
@@ -25,6 +31,8 @@ Todas as mudanças relevantes do AERES Bar. O formato segue o [Keep a Changelog]
 
 ### Alterado
 
+- A versão passa a ser `MAJOR.MINOR` (arquivo `VERSION`) mais o número do build; o DMG passa a se chamar `AERES-Bar.dmg` e traz o atalho **Aplicativos** e um texto para quando o macOS bloquear a primeira abertura.
+- A licença deixa de ser proprietária: o app pode ser usado e distribuído para fins não comerciais.
 - O resumo em anéis quebra em linhas de até seis, o painel rola abaixo do cabeçalho quando não cabe na tela, o medidor da barra alarga com mais de seis provedores e o rodapé cita até três provedores não configurados.
 - Um único item na barra de menus, no lugar de um por provedor: um medidor com uma barra por provedor e a porcentagem do mais perto do limite. Ao passar o mouse, o painel mostra todos os provedores de uma vez; clicar num provedor abre os detalhes dele.
 - **Atualizar agora** consulta as APIs na hora em vez de reaproveitar a resposta recente, respeitando um intervalo mínimo de 15 s e as pausas pedidas pelos provedores.
@@ -37,7 +45,7 @@ Todas as mudanças relevantes do AERES Bar. O formato segue o [Keep a Changelog]
 - A primeira leitura dos logs chegava a 1,7 GB de memória, e o app ficava com ~120 MB em repouso. Agora o pico é de ~115 MB e o repouso, ~26 MB.
 - `make uninstall` também apaga as chaves de API guardadas no Chaves.
 
-## [1.0.0] - 2026-09-27
+## 1.0.0 - 2026-09-27 (primeira versão, antes da publicação contínua)
 
 ### Adicionado
 
@@ -49,7 +57,6 @@ Todas as mudanças relevantes do AERES Bar. O formato segue o [Keep a Changelog]
 - Antigravity: cotas por grupo de modelos e por modelo pelo language server local, com atualização automática quando o app abre ou fecha.
 - Cache em disco das últimas leituras, reaproveitamento de respostas recentes e respeito ao `Retry-After` das APIs.
 - Linha de comando: `--dump`, `--render-preview [--demo]`, `--login-item on|off|status`, `--version`.
-- CI no GitHub Actions (lint, build sem avisos, testes, cobertura mínima, DMG de desenvolvimento) e release automatizada por tag, com assinatura e notarização opcionais.
+- CI no GitHub Actions (lint, build sem avisos, testes, cobertura mínima) e release com assinatura e notarização opcionais.
 
-[Não publicado]: https://github.com/aeresdigital/aeres-bar/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/aeresdigital/aeres-bar/releases/tag/v1.0.0
+[1.0]: https://github.com/aeresdigital/aeres-bar-releases/releases

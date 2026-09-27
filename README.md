@@ -12,7 +12,7 @@
   <a href="https://github.com/aeresdigital/aeres-bar/actions/workflows/ci.yml"><img src="https://github.com/aeresdigital/aeres-bar/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <img src="https://img.shields.io/badge/macOS-14%2B-111?logo=apple" alt="macOS 14+">
   <img src="https://img.shields.io/badge/Swift-6-F05138?logo=swift&logoColor=white" alt="Swift 6">
-  <img src="https://img.shields.io/badge/licen%C3%A7a-propriet%C3%A1ria-555" alt="Licença proprietária">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/licen%C3%A7a-uso%20n%C3%A3o%20comercial-555" alt="Licença: uso não comercial"></a>
 </p>
 
 <p align="center">
@@ -35,6 +35,7 @@
 - [Funcionalidades](#funcionalidades)
 - [Requisitos](#requisitos)
 - [Instalação](#instalação)
+- [Atualizações](#atualizações)
 - [Como usar](#como-usar)
 - [Chaves de API](#chaves-de-api)
 - [Modelos chineses](#modelos-chineses)
@@ -59,6 +60,7 @@
 - **Clique** fixa o painel (fecha com clique fora ou Esc). **Clique direito** abre os ajustes.
 - **Atualização automática** a cada 1–10 min, ao acordar o Mac e quando o Antigravity abre ou fecha. **Atualizar agora** (no painel ou no menu) consulta as APIs na hora. Um dado já lido nunca some: sem conexão ou com a ferramenta fechada, o painel mostra a última leitura e zera as janelas cujo horário de renovação já passou.
 - **Abre com o macOS** (dá para desligar no menu).
+- **Atualiza pelo próprio app:** cada versão publicada aparece no painel e no menu em até uma hora; um clique baixa, confere a assinatura e instala, e o app abre de novo em segundos (veja [Atualizações](#atualizações)).
 - **Leve:** praticamente 0% de CPU em repouso e cerca de 25 MB de memória com o painel fechado. A leitura dos logs é incremental: a primeira passada pelos logs dos últimos 8 dias leva alguns segundos em segundo plano (1,8 GB em ~5 s num Mac com Apple Silicon); as seguintes leem só os bytes novos, em ~0,1 s.
 
 ## Requisitos
@@ -73,17 +75,23 @@
 
 ## Instalação
 
+As versões ficam no repositório público [aeresdigital/aeres-bar-releases](https://github.com/aeresdigital/aeres-bar-releases/releases), que tem só os instaladores (o código-fonte continua privado).
+
+### Pelo Terminal (recomendado)
+
+```bash
+curl -fsSL https://github.com/aeresdigital/aeres-bar-releases/releases/latest/download/install.sh | sh
+```
+
+O instalador baixa a versão mais recente, confere o checksum e a assinatura de código, instala em `/Applications` (substituindo uma versão anterior, mesmo que tenha outro nome) e abre o app. Baixado assim, o app não recebe a marca de quarentena que o navegador coloca: abre sem o aviso "Apple could not verify…" e as próximas versões chegam pelo próprio app. Preferências, chaves de API e cache ficam como estão.
+
 ### Pelo DMG
 
-1. Baixe o DMG:
-   - de uma versão publicada, em [Releases](https://github.com/aeresdigital/aeres-bar/releases) (`AERES-Bar-x.y.z.dmg`, com o `.sha256` ao lado). Ainda não há versão publicada: a primeira sai quando for criada uma tag `vX.Y.Z` (veja [Publicar uma versão](#publicar-uma-versão));
-   - ou a versão de desenvolvimento, gerada a cada push na `main`: em [Actions › CI](https://github.com/aeresdigital/aeres-bar/actions/workflows/ci.yml), abra a execução mais recente da `main` e baixe o artefato `AERES-Bar-<commit>` (fica disponível por 14 dias).
+1. Baixe o `AERES-Bar.dmg` da [versão mais recente](https://github.com/aeresdigital/aeres-bar-releases/releases/latest) (o `.sha256` fica ao lado).
 2. Abra o DMG e arraste o **AERES Bar** para **Aplicativos**.
-3. Abra o app. Sem assinatura Developer ID, o macOS bloqueia a primeira abertura. No macOS 15 ou mais recente, vá em **Ajustes do Sistema › Privacidade e Segurança** e clique em **Abrir Mesmo Assim**; no macOS 14, clique com o botão direito no app › **Abrir**. Pelo Terminal, dá no mesmo:
+3. Abra o app. Sem assinatura Developer ID, o macOS bloqueia a primeira abertura. No macOS 15 ou mais recente, vá em **Ajustes do Sistema › Privacidade e Segurança** e clique em **Abrir Mesmo Assim**; no macOS 14, clique com o botão direito no app › **Abrir**.
 
-   ```bash
-   xattr -dr com.apple.quarantine "/Applications/AERES Bar.app"
-   ```
+Instalado pelo navegador, o app pode ficar protegido pelo macOS contra alterações, e aí não consegue se atualizar sozinho. Quando isso acontece, o próprio app avisa e mostra o comando do Terminal acima: basta rodá-lo uma vez.
 
 ### Pelo código-fonte
 
@@ -102,6 +110,15 @@ make uninstall
 ```
 
 Desliga a abertura no login, encerra o app e apaga o app, o cache, as preferências e as chaves de API que ele guardou no Chaves.
+
+## Atualizações
+
+Cada merge na `main` que muda o app vira uma versão publicada em alguns minutos (veja [CI/CD e releases](#cicd-e-releases)), e os apps instalados a recebem sozinhos:
+
+- **Quando o app procura:** ao abrir, a cada hora e em **Ajustes › Procurar atualizações…**. Ele lê o `update.json` da versão mais recente em [aeres-bar-releases](https://github.com/aeresdigital/aeres-bar-releases/releases/latest).
+- **Como aparece:** no topo do painel (**Nova versão disponível**, com a primeira novidade) e no início do menu (**Instalar a versão 1.0.N…**). Nada abre sozinho por cima do que você está fazendo; **Agora não** deixa a oferta para a próxima vez que o app abrir.
+- **O que acontece ao instalar:** o app baixa o zip da versão, confere a assinatura Ed25519 com a chave pública embutida nele, descompacta ao lado do app instalado, confere o identificador, o número do build e a assinatura de código, fecha e deixa um ajudante trocar os apps e abrir o novo. Se a troca falhar, a versão anterior volta e o app avisa na abertura seguinte.
+- **Pelo Terminal:** `"/Applications/AERES Bar.app/Contents/MacOS/AERESBar" --check-update` compara a versão instalada com a publicada, e o comando de [instalação](#pelo-terminal-recomendado) reinstala a mais recente a qualquer momento.
 
 ## Como usar
 
@@ -122,6 +139,7 @@ Desliga a abertura no login, encerra o app e apaga o app, o cache, as preferênc
 - **Mostrar o número ao lado do ícone** (desligado, fica só o ícone), **Mostrar % restante**, **Mostrar tempo até renovar** e **Cores de alerta**.
 - **Atualizar a cada:** 1, 2 (padrão), 5 ou 10 minutos.
 - **Abrir ao iniciar o macOS.**
+- **Procurar atualizações…** e, quando há uma versão nova, **Instalar a versão 1.0.N…** no topo do menu.
 
 ## Chaves de API
 
@@ -192,6 +210,7 @@ Detalhes que valem saber:
 ## Privacidade e segurança
 
 - Tudo roda localmente. O app não envia telemetria nem tem servidor próprio.
+- Para as atualizações, o app só baixa arquivos públicos do GitHub (`github.com` e o servidor de downloads para onde ele redireciona): o `update.json` e, quando você instala, o zip da versão. O pedido não leva nada seu além da versão do app no `User-Agent`, e nada é instalado sem a assinatura conferir (veja [Atualizações](#atualizações)).
 - Cada credencial só vai para o servidor oficial do seu provedor, por HTTPS: `api.anthropic.com`, `chatgpt.com`, `api.github.com`, `ollama.com`, `openrouter.ai`, `api.z.ai` / `open.bigmodel.cn`, `api.kimi.ai` / `api.kimi.com`, `api.moonshot.ai` / `api.moonshot.cn`, `api.minimax.io` / `api.minimaxi.com` e `api.deepseek.com`. O app nunca a grava em arquivos, no cache ou nos logs.
 - Chaves e logins que outras ferramentas já guardam (Claude Code, Codex, Kimi Code CLI, MiniMax CLI, Coding Tool Helper do Z.ai) são só lidos. O Qwen e o Doubao são lidos rodando os CLIs oficiais (`bl`, `arkcli`), apenas se a pasta de login deles existir.
 - As chaves de API ficam só no Chaves do macOS (serviço *AERES Bar*). São gravadas pelo `/usr/bin/security` com a chave enviada pela entrada padrão, nunca como argumento de linha de comando, que outros processos poderiam listar.
@@ -217,6 +236,8 @@ Veja também [SECURITY.md](SECURITY.md).
 | GLM: "Esta chave não tem um GLM Coding Plan ativo" | A chave é de uma conta sem Coding Plan: use a da conta que tem a assinatura |
 | Kimi Code: "O login do Kimi Code expirou" | Use o Kimi Code CLI uma vez (ou rode `/login` nele) |
 | Qwen ou Doubao: "Rode … auth login" | Instale o CLI oficial (`bl` ou `arkcli`) e entre nele pelo Terminal |
+| "Apple could not verify…" ao abrir | Instale pelo Terminal (`curl -fsSL https://github.com/aeresdigital/aeres-bar-releases/releases/latest/download/install.sh | sh`) ou use **Abrir Mesmo Assim** em **Ajustes do Sistema › Privacidade e Segurança** |
+| "O macOS protege o AERES Bar…" ao atualizar | O app veio de um download pelo navegador. Rode uma vez o comando de instalação pelo Terminal (o aviso tem um botão para copiá-lo); depois as atualizações chegam sozinhas |
 | Números estranhos | Rode o diagnóstico abaixo e abra uma issue com a saída (sem e-mails) |
 
 Diagnóstico e logs:
@@ -230,6 +251,9 @@ Diagnóstico e logs:
 
 # Estado da abertura no login
 "/Applications/AERES Bar.app/Contents/MacOS/AERESBar" --login-item status
+
+# Versão instalada e a mais recente publicada
+"/Applications/AERES Bar.app/Contents/MacOS/AERESBar" --check-update
 ```
 
 ## Desenvolvimento
@@ -249,8 +273,8 @@ Diagnóstico e logs:
 | `make coverage` | Testes com cobertura por módulo e verificação dos mínimos (gera `.build/coverage/coverage.lcov`) |
 | `make format` / `make lint` | Formata / verifica o estilo com o `swift-format` fixado |
 | `make run` | Roda o app a partir do código |
-| `make app` | Gera `dist/AERES Bar.app` (`UNIVERSAL=1` para arm64 + x86_64) |
-| `make dmg` | Gera `dist/AERES-Bar-<versão>.dmg` e o `.sha256` |
+| `make app` | Gera `dist/AERES Bar.app`, versão `MAJOR.MINOR` de `VERSION` + número do build (`UNIVERSAL=1` para arm64 + x86_64) |
+| `make dmg` | Gera `dist/AERES-Bar.dmg` e o `.sha256` |
 | `make install` / `make uninstall` | Instala em / remove de `/Applications` |
 | `make dump` | Mostra em JSON o que o app lê na sua máquina |
 | `make preview` / `make docs-images` | Imagens do painel com seus dados / com dados de exemplo (README) |
@@ -270,11 +294,12 @@ flowchart LR
 
 - **AERESBarCore** não importa AppKit. Tem os modelos, os parsers das APIs, os leitores incrementais de log, os provedores (um `actor` cada), o `UsageStore` (`@Observable`, fonte única de verdade), as preferências e os textos exibidos (`BarPresenter`, `UsagePresentation`), todos testáveis.
 - Tudo que toca o mundo externo fica atrás de um protocolo injetável: `HTTPClient`, `CommandRunner` (`ps`, `lsof`, `security`, `gh`), `ClaudeCredentialSource`, `GitHubTokenSource`, `SecretStore`, `SnapshotPersisting` e relógio. Os testes rodam sem rede, sem Chaves e sem as ferramentas instaladas.
+- **Atualização** (`AERESBarCore/Update`): `UpdateFeed` lê o `update.json` e baixa o zip, `UpdateSignature` confere a assinatura Ed25519, `BundleUpdateInstaller` descompacta, confere e deixa o ajudante trocar os apps, e o `AppUpdater` (`@Observable`) guarda o estado que o painel e o menu mostram.
 - **AERESBarUI** tem o item da barra (`NSStatusItem` com o medidor desenhado como imagem-modelo), o painel flutuante não ativante (SwiftUI sobre Liquid Glass no macOS 26+), o menu de ajustes e as marcas oficiais, vetoriais a partir do SVG de cada fornecedor.
 
 ### Testes
 
-- **Swift Testing**, com mais de 210 testes: parsers com fixtures das respostas reais anonimizadas, leitores de log com arquivos temporários (incluindo linhas parciais e truncamento), provedores com HTTP, processos, credenciais, chaves e relógio falsos (401, 403, 429 com `Retry-After`, credencial expirada, troca e remoção de chave, fallback para logs, Antigravity fechado, servidor do Ollama parado, troca de região, erro no corpo de respostas 200, CLIs oficiais sem login), store, persistência, preferências, gravação de chaves pela entrada padrão, parser SVG, renderização das marcas, do medidor e do painel, e o menu de ajustes.
+- **Swift Testing**, com mais de 250 testes: parsers com fixtures das respostas reais anonimizadas, leitores de log com arquivos temporários (incluindo linhas parciais e truncamento), provedores com HTTP, processos, credenciais, chaves e relógio falsos (401, 403, 429 com `Retry-After`, credencial expirada, troca e remoção de chave, fallback para logs, Antigravity fechado, servidor do Ollama parado, troca de região, erro no corpo de respostas 200, CLIs oficiais sem login), store, persistência, preferências, gravação de chaves pela entrada padrão, atualização (manifesto, feed, assinatura Ed25519, instalação com `ditto` e `codesign` de verdade, troca dos apps pelo ajudante e volta da versão anterior, estados do atualizador), parser SVG, renderização das marcas, do medidor, do painel e do aviso de atualização, e o menu de ajustes.
 - Cobertura mínima verificada no CI: **85% em `AERESBarCore`** (hoje ~94%) e **60% em `AERESBarUI`**. A cola com AppKit (item da barra, janela, `SMAppService`) precisa de sessão gráfica e é verificada manualmente.
 
 ### Convenções
@@ -287,33 +312,38 @@ flowchart LR
 
 | Workflow | Quando | O que faz |
 | --- | --- | --- |
-| [`ci.yml`](.github/workflows/ci.yml) | Push na `main`, PRs | **Lint** no Linux (`swift:6.4`, barato) e um job **macOS** que compila com avisos como erros, roda os testes com cobertura, aplica os mínimos, publica o lcov e, em push na `main`, gera o app universal e o DMG como artefato |
-| [`release.yml`](.github/workflows/release.yml) | Tag `v*.*.*` | Confere a tag com `VERSION`, testa, gera o app universal e o DMG, assina e notariza se houver certificado e publica a Release com DMG, `.sha256` e notas extraídas do `CHANGELOG.md` |
+| [`ci.yml`](.github/workflows/ci.yml) | PRs e push na `main` | **Lint** no Linux (`swift:6.4`, barato) e um job **macOS** que compila com avisos como erros, roda os testes com cobertura, aplica os mínimos e publica o lcov |
+| [`release.yml`](.github/workflows/release.yml) | Push na `main` que muda o app, ou à mão | Testa, gera o app universal, o DMG e o zip assinado com o `update.json`, e publica a versão aqui (tag no commit) e em [aeres-bar-releases](https://github.com/aeresdigital/aeres-bar-releases/releases), de onde as pessoas instalam e os apps se atualizam |
 | [Dependabot](.github/dependabot.yml) | Semanal / mensal | Atualiza as actions e o `swift-format` fixado |
 
-Em repositório privado, os minutos de runners macOS são cobrados com multiplicador. Por isso o lint roda em Linux e há um único job macOS.
+Em repositório privado, os minutos de runners macOS são cobrados com multiplicador. Por isso o lint roda em Linux, o CI tem um único job macOS e a release só roda quando algo do app muda (documentação, testes e configurações do repositório não geram versão).
 
-### Publicar uma versão
+### Versões
 
-1. Atualize `VERSION` e mova as entradas de **Não publicado** para a nova versão no `CHANGELOG.md`.
-2. Faça o commit (`chore: release 1.1.0`) e crie a tag:
+- **Não há etapa manual:** o merge de um PR que muda o app publica a versão em alguns minutos, e os apps instalados a oferecem em até uma hora.
+- **Número:** `MAJOR.MINOR` do arquivo [`VERSION`](VERSION) mais o número do build, que é a quantidade de commits na `main` (`1.0.23`). Ele só cresce, porque a `main` não aceita *force push*, e é o que o app compara para saber se há versão nova. Para abrir a série 1.1, mude `VERSION` para `1.1` no PR.
+- **Notas:** geradas das mensagens de commit desde a versão anterior ([`scripts/release_notes.sh`](scripts/release_notes.sh)): `feat:` vira **Novidades**, `fix:` vira **Correções** e `perf:` vira **Melhorias**; o resto fica de fora. Escreva a mensagem pensando em quem usa o app.
+- **Rodar de novo ou sem publicar:** **Actions › Release › Run workflow**. Com **Publicar** desligado (ou fora da `main`), só gera os arquivos e os guarda como artefato por 14 dias.
+- **Local:** `make app` e `make dmg` geram o mesmo app e o mesmo DMG; `scripts/release_notes.sh` mostra as notas que a próxima versão teria.
 
-   ```bash
-   git tag v1.1.0 && git push origin main v1.1.0
-   ```
+### Segredos
 
-3. O workflow **Release** publica a versão em alguns minutos.
+| Segredo | Para quê | Situação |
+| --- | --- | --- |
+| `UPDATE_SIGNING_KEY` | Chave privada Ed25519 que assina o zip de cada versão. A pública está em `UpdateFeed.publicKey` | Configurado |
+| `RELEASES_TOKEN` | Token *fine-grained* com **Contents: Read and write** só em `aeresdigital/aeres-bar-releases`, para publicar lá | Criar (veja abaixo) |
+| `MACOS_CERTIFICATE`, `MACOS_CERTIFICATE_PASSWORD` | Certificado *Developer ID Application* (.p12 em base64) e a senha | Opcional |
+| `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID`, `NOTARY_KEY` | Chave da App Store Connect API (o `.p8`) para notarizar | Opcional |
 
-### Assinatura e notarização (opcional)
+Sem `UPDATE_SIGNING_KEY` ou `RELEASES_TOKEN`, a versão sai só neste repositório e os apps instalados não a recebem. Sem os opcionais, o app sai com assinatura ad-hoc e o macOS pede confirmação na primeira abertura pelo DMG; com eles, sai assinado com Developer ID, notarizado e grampeado.
 
-Sem os segredos abaixo, a release sai com assinatura ad-hoc e o macOS pede confirmação na primeira abertura. Com eles, sai assinada com Developer ID, notarizada e grampeada:
+Para criar o `RELEASES_TOKEN`: em [github.com/settings/personal-access-tokens/new](https://github.com/settings/personal-access-tokens/new), escolha **Resource owner: aeresdigital**, **Only select repositories › aeres-bar-releases** e **Repository permissions › Contents: Read and write**; depois:
 
-| Segredo | Conteúdo |
-| --- | --- |
-| `MACOS_CERTIFICATE` | Certificado *Developer ID Application* (.p12) em base64 |
-| `MACOS_CERTIFICATE_PASSWORD` | Senha do .p12 |
-| `NOTARY_KEY_ID`, `NOTARY_ISSUER_ID` | Chave da App Store Connect API |
-| `NOTARY_KEY` | Conteúdo do arquivo `.p8` dessa chave |
+```bash
+gh secret set RELEASES_TOKEN -R aeresdigital/aeres-bar
+```
+
+A chave de assinatura não pode ser lida de volta do GitHub: guarde uma cópia fora dele. Trocar a chave exige publicar uma versão com a chave pública nova e faz os apps já instalados pararem de aceitar atualizações até serem reinstalados pelo Terminal.
 
 ## Marcas
 
@@ -321,4 +351,12 @@ Claude e Anthropic são marcas da Anthropic, PBC. OpenAI, ChatGPT e Codex são m
 
 ## Licença
 
-Software proprietário. © 2026 AERES Digital, todos os direitos reservados. Veja [LICENSE](LICENSE).
+O AERES Bar é distribuído sob a [PolyForm Noncommercial License 1.0.0](LICENSE). © 2026 AERES Digital.
+
+Em resumo (o texto em inglês da licença é o que vale):
+
+- **Pode:** usar, copiar e distribuir o app para qualquer fim não comercial, como uso pessoal, estudo, pesquisa, hobby, ou por instituições de ensino, organizações sem fins lucrativos e órgãos públicos.
+- **Não pode:** usar para fins comerciais, o que inclui usar o app a serviço de uma empresa, vendê-lo ou incluí-lo num produto ou serviço pago, sem uma licença comercial da AERES Digital.
+- **Ao repassar:** mantenha a licença e a linha `Required Notice` junto com o app (o app já leva as duas em `Contents/Resources/LICENSE`).
+
+Para uso comercial, fale com a AERES Digital em [aeres.com.br](https://www.aeres.com.br). Os desenhos das marcas de terceiros seguem as licenças listadas em [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

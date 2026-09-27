@@ -7,6 +7,13 @@
 3. Rode `make check` (lint, build sem avisos, testes e cobertura) antes de abrir o PR.
 4. Abra o PR preenchendo o template. O CI precisa passar e o PR precisa de revisão do CODEOWNER.
 5. Faça o merge com *squash*, mantendo a mensagem no padrão Conventional Commits.
+6. Pronto: se o PR muda o app, o merge publica uma versão nova em alguns minutos, e os apps instalados a oferecem em até uma hora. Não há etapa manual de release (veja [CI/CD e releases](README.md#cicd-e-releases)).
+
+## Versões
+
+- O número é `MAJOR.MINOR` do arquivo `VERSION` mais a quantidade de commits na `main`. Para uma série nova (1.1, 2.0), mude `VERSION` no PR e abra a seção dela no `CHANGELOG.md`.
+- As notas de cada versão saem das mensagens de commit desde a anterior: `feat:` vira **Novidades**, `fix:` vira **Correções**, `perf:` vira **Melhorias**; os outros tipos ficam de fora. Escreva a mensagem para quem usa o app (`feat: atualização pelo próprio app`, não `feat: AppUpdater`). `scripts/release_notes.sh` mostra as notas que a próxima versão teria.
+- Mudanças só em documentação, testes ou configuração do repositório não geram versão.
 
 ## Commits
 
