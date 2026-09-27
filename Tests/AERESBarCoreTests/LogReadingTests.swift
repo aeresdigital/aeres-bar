@@ -37,6 +37,32 @@ struct JSONLTailReaderTests {
         try "{\"type\":\"assistant\",\"n\":2}\n".write(to: file, atomically: true, encoding: .utf8)
         #expect(try collect(reader, file, needles: [Array("assistant".utf8)]) == [#"{"type":"assistant","n":2}"#])
     }
+
+    @Test("Linhas muito maiores que o buffer, e quebras exatamente no fim de uma leitura")
+    func longLinesAndBoundaries() throws {
+        let folder = try TemporaryDirectory()
+        defer { folder.remove() }
+        let long = "{\"payload\":\"" + String(repeating: "x", count: 10_000) + "\"}"
+        let file = try folder.write("{\"a\":1}\n\(long)\n{\"b\":2}\n", to: "log.jsonl")
+        let reader = JSONLTailReader(chunkSize: 8)  // "{"a":1}\n" fills the first read exactly
+
+        let lines = try collect(reader, file)
+        #expect(lines.count == 3)
+        #expect(lines.first == #"{"a":1}"#)
+        #expect(lines.dropFirst().first == long)
+        #expect(lines.last == #"{"b":2}"#)
+
+        try folder.append("{\"c\":3}\n", to: "log.jsonl")
+        #expect(try collect(reader, file) == [#"{"c":3}"#])
+    }
+
+    @Test("Arquivo que sumiu é ignorado")
+    func missingFile() {
+        let reader = JSONLTailReader()
+        var lines = 0
+        reader.readNewLines(at: "/nonexistent/\(UUID().uuidString).jsonl", fileSize: 100, needles: [Array("{".utf8)]) { _ in lines += 1 }
+        #expect(lines == 0)
+    }
 }
 
 @Suite("Leitura rasa de objetos JSON")

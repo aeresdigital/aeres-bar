@@ -34,10 +34,11 @@
 
 ## Novo provedor
 
-1. Crie `Sources/AERESBarCore/Providers/<Nome>/` com um `actor` que implemente `UsageProvider`.
+1. Crie `Sources/AERESBarCore/Providers/<Nome>/` com um `actor` que implemente `UsageProvider` (`snapshot(previous:reason:)`). Para APIs remotas, use `FetchPolicy` e `FetchState`: eles cuidam do reaproveitamento, da leitura manual e das pausas pedidas com HTTP 429.
 2. Coloque os parsers em tipos puros, testados com fixtures anonimizadas em `Tests/AERESBarCoreTests/Fixtures`.
-3. Adicione o caso em `ProviderID`, a marca oficial em `BrandMark` e as cores em `BrandPalette`.
-4. Registre o provedor em `LiveEnvironment` e atualize o README e o CHANGELOG.
+3. Se o serviço não deixa um login no Mac, adicione uma conta em `SecretAccount` e leia a chave pelo `SecretStore` injetado; o menu **Chaves de API** e o `--set-key` passam a oferecê-la sozinhos.
+4. Adicione o caso em `ProviderID`, a marca oficial em `BrandMark`, as cores em `BrandPalette` e um snapshot de exemplo em `DemoData`.
+5. Registre o provedor em `LiveEnvironment` e atualize o README, o `docs/ARCHITECTURE.md` e o CHANGELOG.
 
 ## Dados sensíveis
 

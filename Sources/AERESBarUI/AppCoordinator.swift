@@ -11,20 +11,22 @@ public final class AppCoordinator {
     private let events = SystemEventsMonitor()
     private var antigravityFollowUp: Task<Void, Never>?
 
-    public init(store: UsageStore, settings: AppSettings) {
+    public init(store: UsageStore, settings: AppSettings, secrets: any SecretStore) {
         self.store = store
         self.settings = settings
         self.statusBar = StatusBarController(
             store: store,
             settings: settings,
-            settingsMenu: SettingsMenu(store: store, settings: settings)
+            settingsMenu: SettingsMenu(store: store, settings: settings, secrets: secrets)
         )
     }
 
     public func start() {
+        store.enabledProviders = Set(settings.enabledProviders)
         statusBar.install()
         store.startAutoRefresh(every: settings.refreshInterval)
         followRefreshInterval()
+        followEnabledProviders()
         events.start(
             onWake: { [weak self] in self?.store.refreshAll() },
             onAntigravityLaunchOrQuit: { [weak self] in self?.refreshAntigravitySoon() }
@@ -42,6 +44,22 @@ public final class AppCoordinator {
                 guard let self else { return }
                 store.startAutoRefresh(every: settings.refreshInterval)
                 followRefreshInterval()
+            }
+        }
+    }
+
+    /// Keeps the store's providers in step with the menu, reading newly enabled ones right away.
+    private func followEnabledProviders() {
+        withObservationTracking {
+            _ = settings.disabledProviders
+        } onChange: { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                let enabled = Set(settings.enabledProviders)
+                let added = enabled.subtracting(store.enabledProviders)
+                store.enabledProviders = enabled
+                for provider in added { store.requestRefresh(provider) }
+                followEnabledProviders()
             }
         }
     }

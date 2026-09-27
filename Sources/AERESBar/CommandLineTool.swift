@@ -52,6 +52,40 @@ enum CommandLineTool {
         }
     }
 
+    /// Stores the key typed without echo, or piped through standard input, so it never shows up
+    /// on screen or in the shell history.
+    static func setKey(_ account: SecretAccount) {
+        let input: String
+        if isatty(STDIN_FILENO) != 0 {
+            var buffer = [CChar](repeating: 0, count: 1_024)
+            let read = buffer.withUnsafeMutableBufferPointer { buffer in
+                readpassphrase("Chave da API do \(account.displayName): ", buffer.baseAddress, buffer.count, RPP_REQUIRE_TTY) != nil
+            }
+            let length = buffer.firstIndex(of: 0) ?? buffer.count
+            input = read ? String(decoding: buffer[..<length].map { UInt8(bitPattern: $0) }, as: UTF8.self) : ""
+            buffer.withUnsafeMutableBufferPointer { $0.update(repeating: 0) }
+        } else {
+            input = String(decoding: FileHandle.standardInput.readDataToEndOfFile(), as: UTF8.self)
+        }
+        do {
+            try LiveEnvironment.secrets.setSecret(input, for: account)
+            print("Chave do \(account.displayName) guardada no Chaves.")
+        } catch {
+            report("erro: não foi possível guardar a chave (\(error))")
+            exit(1)
+        }
+    }
+
+    static func deleteKey(_ account: SecretAccount) {
+        do {
+            try LiveEnvironment.secrets.deleteSecret(for: account)
+            print("Chave do \(account.displayName) removida.")
+        } catch {
+            report("erro: não foi possível remover a chave (\(error))")
+            exit(1)
+        }
+    }
+
     /// Runs async work on the main actor, then exits with its outcome.
     private static func run(_ work: @escaping @MainActor () async throws -> Void) {
         Task { @MainActor in

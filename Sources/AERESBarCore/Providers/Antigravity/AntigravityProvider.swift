@@ -55,7 +55,7 @@ public actor AntigravityProvider: UsageProvider {
         self.now = now
     }
 
-    public func snapshot(previous: ProviderSnapshot?) async -> ProviderSnapshot {
+    public func snapshot(previous: ProviderSnapshot?, reason: RefreshReason) async -> ProviderSnapshot {
         let now = now()
         var snapshot = previous ?? ProviderSnapshot(provider: .antigravity)
         snapshot.checkedAt = now

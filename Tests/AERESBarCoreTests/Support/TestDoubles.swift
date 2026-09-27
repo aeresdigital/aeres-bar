@@ -69,12 +69,59 @@ final class MockHTTPClient: HTTPClient {
     }
 }
 
-/// Returns canned command output by executable path.
-struct ScriptedCommandRunner: CommandRunner {
-    var outputs: [String: CommandOutput]
+/// Answers commands from a closure and records every call, standard input included.
+final class ScriptedCommandRunner: CommandRunner {
+    struct Call: Equatable, Sendable {
+        var executable: String
+        var arguments: [String]
+        var input: Data?
+    }
 
-    func run(_ executable: String, _ arguments: [String], timeout: TimeInterval) -> CommandOutput? {
-        outputs[executable]
+    private let responder: @Sendable (Call) -> CommandOutput?
+    private let log = OSAllocatedUnfairLock<[Call]>(initialState: [])
+
+    init(_ responder: @escaping @Sendable (Call) -> CommandOutput?) {
+        self.responder = responder
+    }
+
+    /// Canned output by executable path.
+    convenience init(outputs: [String: CommandOutput]) {
+        self.init { outputs[$0.executable] }
+    }
+
+    var calls: [Call] { log.withLock { $0 } }
+
+    func run(_ executable: String, _ arguments: [String], input: Data?, timeout: TimeInterval) -> CommandOutput? {
+        let call = Call(executable: executable, arguments: arguments, input: input)
+        log.withLock { $0.append(call) }
+        return responder(call)
+    }
+}
+
+/// Keeps API keys in memory.
+final class MemorySecretStore: SecretStore {
+    private let stored: OSAllocatedUnfairLock<[SecretAccount: String]>
+
+    init(_ secrets: [SecretAccount: String] = [:]) {
+        stored = OSAllocatedUnfairLock(initialState: secrets)
+    }
+
+    func secret(for account: SecretAccount) -> String? { stored.withLock { $0[account] } }
+    func setSecret(_ secret: String, for account: SecretAccount) throws { stored.withLock { $0[account] = secret } }
+    func deleteSecret(for account: SecretAccount) throws { stored.withLock { $0[account] = nil } }
+}
+
+/// Serves a fixed GitHub token.
+struct StubGitHubTokenSource: GitHubTokenSource {
+    var value: String?
+
+    func token() -> String? { value }
+}
+
+extension UsageProvider {
+    /// An automatic refresh, the common case in tests.
+    func snapshot(previous: ProviderSnapshot?) async -> ProviderSnapshot {
+        await snapshot(previous: previous, reason: .automatic)
     }
 }
 

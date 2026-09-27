@@ -23,6 +23,10 @@ enum AERESBarApp {
             CommandLineTool.renderPreviews(into: URL(fileURLWithPath: directory, isDirectory: true), demo: demo)
         case .loginItem(let action):
             CommandLineTool.loginItem(action)
+        case .setKey(let account):
+            CommandLineTool.setKey(account)
+        case .deleteKey(let account):
+            CommandLineTool.deleteKey(account)
         case .version:
             print("\(AppInfo.name) \(AppInfo.version) (\(AppInfo.build))")
         case .help:
@@ -48,7 +52,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        let coordinator = AppCoordinator(store: LiveEnvironment.makeStore(persistent: true), settings: AppSettings())
+        let settings = AppSettings()
+        let coordinator = AppCoordinator(
+            store: LiveEnvironment.makeStore(persistent: true, enabled: Set(settings.enabledProviders)),
+            settings: settings,
+            secrets: LiveEnvironment.secrets
+        )
         coordinator.start()
         self.coordinator = coordinator
     }

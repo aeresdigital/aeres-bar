@@ -70,6 +70,22 @@ struct ClaudeProviderTests {
         #expect(http.requests.count == 2)
     }
 
+    @Test("O botão Atualizar consulta a Anthropic mesmo dentro dos 3 minutos, mas não a cada clique")
+    func manualRefresh() async throws {
+        let http = MockHTTPClient(status: 200, body: try Fixture.data("claude-usage.json"))
+        let provider = ClaudeProvider(
+            http: http, credentialSource: StubCredentialSource(credentials()), logRoots: noLogs, now: clock.provider)
+        _ = await provider.snapshot(previous: nil)
+        clock.advance(by: 10)
+        _ = await provider.snapshot(previous: nil, reason: .manual)
+        #expect(http.requests.count == 1)  // younger than 15 s: reused even on a click
+        clock.advance(by: 10)
+        _ = await provider.snapshot(previous: nil)
+        #expect(http.requests.count == 1)
+        _ = await provider.snapshot(previous: nil, reason: .manual)
+        #expect(http.requests.count == 2)
+    }
+
     @Test("Credencial expirada: não chama a rede e mantém os últimos limites")
     func expiredCredentials() async throws {
         let http = MockHTTPClient(status: 200, body: try Fixture.data("claude-usage.json"))
@@ -354,5 +370,291 @@ struct FetchPolicyTests {
         #expect(
             policy.backoffDeadline(from: HTTPResponse(status: 429, body: Data(), headers: ["Retry-After": "99999"]), now: now)
                 == now.addingTimeInterval(1_800))
+    }
+
+    @Test("Leitura manual só reaproveita respostas de menos de 15 s")
+    func manualReuse() {
+        let policy = FetchPolicy(minimumInterval: 60, manualMinimumInterval: 15)
+        let fetched = now.addingTimeInterval(-20)
+        #expect(policy.canReuse(fetchedAt: fetched, now: now, reason: .automatic))
+        #expect(!policy.canReuse(fetchedAt: fetched, now: now, reason: .manual))
+        #expect(policy.canReuse(fetchedAt: now.addingTimeInterval(-10), now: now, reason: .manual))
+    }
+}
+
+@Suite("Provedor GitHub Copilot")
+struct CopilotProviderTests {
+    let clock = TestClock()
+
+    private func provider(_ http: MockHTTPClient, token: String? = "gho_test") -> CopilotProvider {
+        CopilotProvider(http: http, tokenSource: StubGitHubTokenSource(value: token), now: clock.provider)
+    }
+
+    @Test("Lê as cotas com o login do GitHub")
+    func success() async throws {
+        let http = MockHTTPClient(status: 200, body: try Fixture.data("copilot-user-free.json"))
+        let snapshot = await provider(http).snapshot(previous: nil)
+        #expect(snapshot.status == .ok)
+        #expect(snapshot.plan == "Free")
+        #expect(snapshot.windows.map(\.id) == ["copilot.chat", "copilot.completions"])
+        #expect(snapshot.source == "API do GitHub")
+        #expect(snapshot.limitsUpdatedAt == clock.now)
+        let request = try #require(http.requests.first)
+        #expect(request.url?.absoluteString == "https://api.github.com/copilot_internal/user")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "token gho_test")
+    }
+
+    @Test("Sem login do GitHub: fica como não configurado, sem chamar a rede")
+    func noToken() async {
+        let http = MockHTTPClient(status: 200)
+        let snapshot = await provider(http, token: nil).snapshot(previous: nil)
+        #expect(snapshot.status == .notInstalled)
+        #expect(http.requests.isEmpty)
+    }
+
+    @Test(
+        "Respostas de erro do GitHub",
+        arguments: [
+            (401, [:], ProviderIssue.Kind.unauthorized),
+            (403, ["X-RateLimit-Remaining": "0"], .rateLimited),
+            (429, [:], .rateLimited),
+            (403, [:], .notSignedIn),
+            (404, [:], .notSignedIn),
+            (502, [:], .invalidResponse),
+        ] as [(Int, [String: String], ProviderIssue.Kind)]
+    )
+    func errors(status: Int, headers: [String: String], expected: ProviderIssue.Kind) async {
+        let snapshot = await provider(MockHTTPClient(status: status, headers: headers)).snapshot(previous: nil)
+        #expect(snapshot.issue == expected)
+        #expect(snapshot.status == .error)
+    }
+
+    @Test("Falha de rede e resposta ilegível")
+    func failures() async {
+        #expect(await provider(MockHTTPClient { _ in throw TestError.offline }).snapshot(previous: nil).issue == .network)
+        #expect(await provider(MockHTTPClient(status: 200, body: Data("<html>".utf8))).snapshot(previous: nil).issue == .invalidResponse)
+    }
+
+    @Test("Pausa pedida pelo GitHub vale até para o botão Atualizar")
+    func backoff() async throws {
+        let http = MockHTTPClient(status: 429, headers: ["Retry-After": "120"])
+        let copilot = provider(http)
+        _ = await copilot.snapshot(previous: nil)
+        clock.advance(by: 60)
+        #expect(await copilot.snapshot(previous: nil, reason: .manual).issue == .rateLimited)
+        #expect(http.requests.count == 1)
+
+        clock.advance(by: 61)
+        http.respond { _ in HTTPResponse(status: 200, body: (try? Fixture.data("copilot-user-pro.json")) ?? Data()) }
+        #expect(await copilot.snapshot(previous: nil).status == .ok)
+        #expect(http.requests.count == 2)
+    }
+
+    @Test("Leituras automáticas reaproveitam a resposta por um minuto")
+    func reuse() async throws {
+        let http = MockHTTPClient(status: 200, body: try Fixture.data("copilot-user-pro.json"))
+        let copilot = provider(http)
+        _ = await copilot.snapshot(previous: nil)
+        clock.advance(by: 59)
+        _ = await copilot.snapshot(previous: nil)
+        #expect(http.requests.count == 1)
+        clock.advance(by: 2)
+        _ = await copilot.snapshot(previous: nil)
+        #expect(http.requests.count == 2)
+    }
+}
+
+@Suite("Provedor Ollama")
+struct OllamaProviderTests {
+    let clock = TestClock()
+    static let server = URL(string: "http://127.0.0.1:11434") ?? URL(fileURLWithPath: "/")
+
+    /// The local server's `/api/version` and `/api/ps`, or a refused connection.
+    private func localServer(running: Bool) -> MockHTTPClient {
+        MockHTTPClient { request in
+            guard running else { throw TestError.offline }
+            switch request.url?.path {
+            case "/api/version": return HTTPResponse(status: 200, body: Data(#"{"version": "0.13.2"}"#.utf8))
+            case "/api/ps": return HTTPResponse(status: 200, body: (try? Fixture.data("ollama-ps.json")) ?? Data())
+            default: return HTTPResponse(status: 404, body: Data())
+            }
+        }
+    }
+
+    private func provider(
+        cloud: MockHTTPClient = MockHTTPClient(status: 500),
+        running: Bool,
+        secrets: MemorySecretStore = MemorySecretStore(),
+        installed: Bool = true
+    ) -> OllamaProvider {
+        OllamaProvider(
+            cloudHTTP: cloud,
+            localHTTP: localServer(running: running),
+            secrets: secrets,
+            server: Self.server,
+            installations: installed ? [URL(fileURLWithPath: "/")] : [],
+            now: clock.provider
+        )
+    }
+
+    @Test("Com a chave: limites do Ollama Cloud e status do servidor local")
+    func cloudAndLocal() async throws {
+        let cloud = MockHTTPClient(status: 200, body: try Fixture.data("ollama-usage.json"))
+        let snapshot = await provider(cloud: cloud, running: true, secrets: MemorySecretStore([.ollama: "ollama-test-key"]))
+            .snapshot(previous: nil)
+        #expect(snapshot.status == .ok)
+        #expect(snapshot.windows.map(\.id) == ["ollama.session", "ollama.weekly"])
+        #expect(snapshot.source == "Ollama Cloud + servidor local")
+        #expect(snapshot.details.first == DetailRow(label: "Servidor local", value: "v0.13.2 · em execução"))
+        #expect(snapshot.details.last?.value.contains("qwen3-coder:30b") == true)
+        let request = try #require(cloud.requests.first)
+        #expect(request.url?.absoluteString == "https://ollama.com/api/usage")
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer ollama-test-key")
+    }
+
+    @Test("Sem a chave, com o servidor local: sem limites e com a dica de onde pôr a chave")
+    func localOnly() async {
+        let cloud = MockHTTPClient(status: 200)
+        let snapshot = await provider(cloud: cloud, running: true).snapshot(previous: nil)
+        #expect(snapshot.status == .ok)
+        #expect(snapshot.windows.isEmpty)
+        #expect(snapshot.message?.contains("Chaves de API") == true)
+        #expect(snapshot.source == "Servidor local do Ollama")
+        #expect(cloud.requests.isEmpty)
+    }
+
+    @Test("Sem a chave e com o servidor parado")
+    func serverStopped() async {
+        let snapshot = await provider(running: false).snapshot(previous: nil)
+        #expect(snapshot.issue == .sourceUnavailable)
+        #expect(snapshot.status == .error)
+    }
+
+    @Test("Nem instalado nem com chave")
+    func notInstalled() async {
+        #expect(await provider(running: false, installed: false).snapshot(previous: nil).status == .notInstalled)
+    }
+
+    @Test("Só a chave, sem o app instalado: lê o Ollama Cloud")
+    func cloudOnly() async throws {
+        let cloud = MockHTTPClient(status: 200, body: try Fixture.data("ollama-usage.json"))
+        let snapshot = await provider(
+            cloud: cloud, running: false, secrets: MemorySecretStore([.ollama: "ollama-test-key"]), installed: false
+        )
+        .snapshot(previous: nil)
+        #expect(snapshot.status == .ok)
+        #expect(snapshot.source == "Ollama Cloud")
+        #expect(snapshot.details.isEmpty)
+    }
+
+    @Test(
+        "Erros do Ollama Cloud",
+        arguments: [
+            (401, ProviderIssue.Kind.unauthorized), (403, .unauthorized), (429, .rateLimited), (500, .invalidResponse), (0, .network),
+        ]
+    )
+    func errors(status: Int, expected: ProviderIssue.Kind) async {
+        let cloud = MockHTTPClient { _ in
+            guard status > 0 else { throw TestError.offline }
+            return HTTPResponse(status: status, body: Data())
+        }
+        let snapshot = await provider(cloud: cloud, running: false, secrets: MemorySecretStore([.ollama: "ollama-test-key"]))
+            .snapshot(previous: nil)
+        #expect(snapshot.issue == expected)
+    }
+
+    @Test("Trocar a chave descarta o que a chave anterior leu")
+    func keyChange() async throws {
+        let secrets = MemorySecretStore([.ollama: "first-key-123"])
+        let cloud = MockHTTPClient(status: 200, body: try Fixture.data("ollama-usage.json"))
+        let ollama = provider(cloud: cloud, running: false, secrets: secrets)
+        let first = await ollama.snapshot(previous: nil)
+        #expect(first.status == .ok)
+
+        try secrets.setSecret("second-key-456", for: .ollama)
+        cloud.respond { _ in HTTPResponse(status: 401, body: Data()) }
+        let second = await ollama.snapshot(previous: first)
+        #expect(cloud.requests.count == 2)  // not served from the first key's cache
+        #expect(cloud.requests.last?.value(forHTTPHeaderField: "Authorization") == "Bearer second-key-456")
+        #expect(second.issue == .unauthorized)
+        #expect(second.windows.isEmpty)  // nor showing the first key's limits
+    }
+}
+
+@Suite("Provedor OpenRouter")
+struct OpenRouterProviderTests {
+    let clock = TestClock()
+
+    private func provider(
+        _ http: MockHTTPClient, secrets: MemorySecretStore = MemorySecretStore([.openRouter: "sk-or-v1-test"])
+    )
+        -> OpenRouterProvider
+    {
+        OpenRouterProvider(http: http, secrets: secrets, now: clock.provider)
+    }
+
+    @Test("Lê a chave e o saldo, com os cabeçalhos certos")
+    func success() async throws {
+        let key = try Fixture.data("openrouter-key.json")
+        let credits = try Fixture.data("openrouter-credits.json")
+        let http = MockHTTPClient { request in
+            HTTPResponse(status: 200, body: request.url?.lastPathComponent == "credits" ? credits : key)
+        }
+        let snapshot = await provider(http).snapshot(previous: nil)
+        #expect(snapshot.status == .ok)
+        #expect(snapshot.plan == nil)
+        #expect(snapshot.windows.map(\.id) == ["openrouter.limit", "openrouter.free"])
+        #expect(snapshot.details.map(\.label) == ["Gasto", "Saldo"])
+        #expect(
+            http.requests.map { $0.url?.absoluteString } == ["https://openrouter.ai/api/v1/key", "https://openrouter.ai/api/v1/credits"])
+        let request = try #require(http.requests.first)
+        #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer sk-or-v1-test")
+        #expect(request.value(forHTTPHeaderField: "X-Title") == "AERES Bar")
+    }
+
+    @Test("Chave comum: o saldo exige chave de gerenciamento e fica de fora")
+    func creditsForbidden() async throws {
+        let key = try Fixture.data("openrouter-key-free.json")
+        let http = MockHTTPClient { request in
+            request.url?.lastPathComponent == "credits" ? HTTPResponse(status: 403, body: Data()) : HTTPResponse(status: 200, body: key)
+        }
+        let snapshot = await provider(http).snapshot(previous: nil)
+        #expect(snapshot.status == .ok)
+        #expect(snapshot.plan == "Gratuito")
+        #expect(!snapshot.details.contains { $0.label == "Saldo" })
+    }
+
+    @Test("Sem chave não consulta nada; remover a chave apaga a leitura anterior")
+    func keyRemoved() async throws {
+        let secrets = MemorySecretStore([.openRouter: "sk-or-v1-test"])
+        let http = MockHTTPClient(status: 200, body: try Fixture.data("openrouter-key.json"))
+        let openRouter = provider(http, secrets: secrets)
+        let first = await openRouter.snapshot(previous: nil)
+        #expect(!first.windows.isEmpty)
+
+        try secrets.deleteSecret(for: .openRouter)
+        let second = await openRouter.snapshot(previous: first)
+        #expect(second.status == .notInstalled)
+        #expect(second.windows.isEmpty)
+        #expect(http.requests.count == 2)  // key and credits, for the first read only
+    }
+
+    @Test(
+        "Erros do OpenRouter",
+        arguments: [
+            (401, ProviderIssue.Kind.unauthorized), (403, .unauthorized), (429, .rateLimited), (500, .invalidResponse), (0, .network),
+        ]
+    )
+    func errors(status: Int, expected: ProviderIssue.Kind) async {
+        let http = MockHTTPClient { _ in
+            guard status > 0 else { throw TestError.offline }
+            return HTTPResponse(status: status, body: Data("{}".utf8))
+        }
+        #expect(await provider(http).snapshot(previous: nil).issue == expected)
+    }
+
+    @Test("Resposta ilegível")
+    func invalidResponse() async {
+        #expect(await provider(MockHTTPClient(status: 200, body: Data("<html>".utf8))).snapshot(previous: nil).issue == .invalidResponse)
     }
 }
