@@ -1,0 +1,13 @@
+{
+  "model_remains": [
+    {
+      "model_name": "MiniMax-M*",
+      "start_time": 1776355200000,
+      "end_time": 1776373200000,
+      "remains_time": 7151954,
+      "current_interval_total_count": 1500,
+      "current_interval_usage_count": 228
+    }
+  ],
+  "base_resp": { "status_code": 0, "status_msg": "success" }
+}

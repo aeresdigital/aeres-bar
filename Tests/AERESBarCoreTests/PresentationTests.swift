@@ -178,6 +178,9 @@ struct UsagePresentationTests {
         #expect(UsagePresentation.updatedLine(for: snapshots, now: now) == "Atualizado há 12 s")
         #expect(UsagePresentation.unconfiguredLine(for: []) == nil)
         #expect(UsagePresentation.unconfiguredLine(for: [.ollama, .openrouter]) == "Não configurados: Ollama, OpenRouter")
+        #expect(
+            UsagePresentation.unconfiguredLine(for: [.claude, .codex, .antigravity, .copilot, .ollama])
+                == "Não configurados: Claude, Codex, Antigravity e mais 2")
     }
 
     @Test("Cota restante por modelo")
@@ -233,7 +236,7 @@ struct CLICommandTests {
             Issue.record("esperava erro para conta de chave desconhecida")
             return
         }
-        #expect(reason == "--set-key aceita openrouter ou ollama")
+        #expect(reason == "--set-key aceita " + SecretAccount.allCases.map(\.rawValue).joined(separator: " ou "))
         guard case .invalid = CLICommand.parse(["AERESBar", "--delete-key"]) else {
             Issue.record("esperava erro para conta ausente")
             return

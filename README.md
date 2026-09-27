@@ -5,7 +5,7 @@
 <h1 align="center">AERES Bar</h1>
 
 <p align="center">
-  Consumo, limites e renovação do <b>Claude Code</b>, do <b>Codex</b>, do <b>Antigravity</b>, do <b>GitHub Copilot</b>, do <b>Ollama</b> e do <b>OpenRouter</b> num só item da barra de menus do macOS.
+  Consumo, limites e renovação do <b>Claude Code</b>, do <b>Codex</b>, do <b>Antigravity</b>, do <b>GitHub Copilot</b>, do <b>Ollama</b>, do <b>OpenRouter</b> e dos modelos chineses (<b>GLM</b>, <b>Kimi</b>, <b>MiniMax</b>, <b>DeepSeek</b>, <b>Qwen</b> e <b>Doubao</b>) num só item da barra de menus do macOS.
 </p>
 
 <p align="center">
@@ -16,12 +16,12 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/menubar-light.png" width="135" alt="O item do AERES Bar na barra de menus: um medidor por provedor e 97%">
+  <img src="docs/images/menubar-light.png" width="145" alt="O item do AERES Bar na barra de menus: um medidor por provedor e 97%">
 </p>
 
 <table align="center">
   <tr>
-    <td><img src="docs/images/panel-dark.png" width="340" alt="Painel com o resumo em anéis e os seis provedores"></td>
+    <td><img src="docs/images/panel-dark.png" width="340" alt="Painel com o resumo em anéis e os provedores, entre eles GLM, Kimi e DeepSeek"></td>
     <td><img src="docs/images/panel-expanded-light.png" width="340" alt="Painel com os detalhes do Claude Code abertos"></td>
   </tr>
 </table>
@@ -36,7 +36,8 @@
 - [Requisitos](#requisitos)
 - [Instalação](#instalação)
 - [Como usar](#como-usar)
-- [Chaves de API (OpenRouter e Ollama Cloud)](#chaves-de-api-openrouter-e-ollama-cloud)
+- [Chaves de API](#chaves-de-api)
+- [Modelos chineses](#modelos-chineses)
 - [De onde vêm os números](#de-onde-vêm-os-números)
 - [Privacidade e segurança](#privacidade-e-segurança)
 - [Solução de problemas](#solução-de-problemas)
@@ -54,7 +55,7 @@
   - no topo, um **resumo em anéis no estilo do Apple Watch**: um anel por provedor, com o logo no centro e a porcentagem embaixo, verde até 79%, laranja a partir de 80% e vermelho a partir de 95%;
   - abaixo, cada janela de limite numa linha, com barra de progresso, % usado e quanto falta para renovar;
   - clicar num anel ou num provedor abre os detalhes: quando renova (`Renova em 1h 17min · hoje às 05:10`), tokens da sessão, do dia e da semana (entrada, saída, cache lido e gravado, respostas), plano, uso extra, uso semanal por produto, cota por modelo, gasto e saldo.
-- **Seis provedores:** Claude Code, Codex, Antigravity, GitHub Copilot, Ollama (Cloud e servidor local) e OpenRouter. Cada um pode ser desligado no menu; os que não estão configurados aparecem no rodapé do painel, com um atalho para configurar.
+- **Treze provedores:** Claude Code, Codex, Antigravity, GitHub Copilot, Ollama (Cloud e servidor local), OpenRouter e os chineses GLM (Z.ai), Kimi Code, Kimi API, MiniMax, DeepSeek, Qwen e Doubao. Cada um pode ser desligado no menu; os que não estão configurados aparecem no rodapé do painel, com um atalho para configurar.
 - **Clique** fixa o painel (fecha com clique fora ou Esc). **Clique direito** abre os ajustes.
 - **Atualização automática** a cada 1–10 min, ao acordar o Mac e quando o Antigravity abre ou fecha. **Atualizar agora** (no painel ou no menu) consulta as APIs na hora. Um dado já lido nunca some: sem conexão ou com a ferramenta fechada, o painel mostra a última leitura e zera as janelas cujo horário de renovação já passou.
 - **Abre com o macOS** (dá para desligar no menu).
@@ -66,7 +67,8 @@
 - As ferramentas que você quer acompanhar, instaladas e com login:
   - [Claude Code](https://claude.com/claude-code), [Codex CLI](https://github.com/openai/codex) (login com ChatGPT) e/ou [Antigravity](https://antigravity.google);
   - GitHub Copilot: o login do [GitHub CLI](https://cli.github.com) (`gh auth login`) ou de um plugin do Copilot para Vim, Neovim, JetBrains ou Xcode;
-  - Ollama e OpenRouter: uma chave de API (veja [Chaves de API](#chaves-de-api-openrouter-e-ollama-cloud)). Sem chave, o Ollama mostra só o servidor local.
+  - Ollama e OpenRouter: uma chave de API (veja [Chaves de API](#chaves-de-api)). Sem chave, o Ollama mostra só o servidor local;
+  - modelos chineses: uma chave de API ou o login da ferramenta oficial, conforme o provedor (veja [Modelos chineses](#modelos-chineses)).
 - Para compilar: Xcode 26 ou mais recente (o CI compila com o Xcode 26.6 e o Swift 6.3).
 
 ## Instalação
@@ -114,21 +116,26 @@ Desliga a abertura no login, encerra o app e apaga o app, o cache, as preferênc
 **Ajustes** (clique direito, ou ⚙︎ no topo do painel):
 
 - **Provedores:** liga ou desliga cada provedor. Desligado, ele não é consultado nem aparece. O último não pode ser desligado.
-- **Chaves de API:** define, troca ou remove as chaves do OpenRouter e do Ollama Cloud, e abre a página onde criá-las.
+- **Chaves de API:** define, troca ou remove as chaves (OpenRouter, Ollama Cloud, GLM, Kimi Code, Kimi API, MiniMax e DeepSeek) e abre a página onde criá-las.
 - **Ícone na barra:** medidores de todos os provedores (padrão) ou o logo do provedor mais crítico.
 - **Número na barra:** limite mais crítico, janela principal, limite semanal ou tokens de hoje.
 - **Mostrar o número ao lado do ícone** (desligado, fica só o ícone), **Mostrar % restante**, **Mostrar tempo até renovar** e **Cores de alerta**.
 - **Atualizar a cada:** 1, 2 (padrão), 5 ou 10 minutos.
 - **Abrir ao iniciar o macOS.**
 
-## Chaves de API (OpenRouter e Ollama Cloud)
+## Chaves de API
 
-O OpenRouter e o Ollama Cloud não deixam um login no Mac que o app possa reaproveitar, então pedem uma chave:
+Os serviços que não deixam um login no Mac para o app reaproveitar pedem uma chave:
 
-| Serviço | Onde criar | Tipo de chave |
+| Serviço | Onde criar | Observação |
 | --- | --- | --- |
 | OpenRouter | [openrouter.ai/settings/keys](https://openrouter.ai/settings/keys) | Qualquer chave (`sk-or-v1-…`). Com uma chave de gerenciamento, o painel também mostra o saldo de créditos |
 | Ollama Cloud | [ollama.com/settings/keys](https://ollama.com/settings/keys) | Chave da API da sua conta |
+| GLM (Z.ai) | [z.ai/manage-apikey/apikey-list](https://z.ai/manage-apikey/apikey-list) (China: bigmodel.cn) | Chave de uma conta com GLM Coding Plan |
+| Kimi Code | [kimi.ai/code/console](https://www.kimi.ai/code/console) (China: kimi.com) | Dispensável se o Kimi Code CLI estiver logado |
+| Kimi API | [platform.kimi.ai/console/api-keys](https://platform.kimi.ai/console/api-keys) (China: platform.kimi.com) | Chave da plataforma aberta (antiga Moonshot) |
+| MiniMax | [platform.minimax.io › Token Plan](https://platform.minimax.io/user-center/payment/token-plan) (China: platform.minimax.cn) | A *Subscription Key* (`sk-cp-…`); a de pagamento por uso não lê o plano |
+| DeepSeek | [platform.deepseek.com/api_keys](https://platform.deepseek.com/api_keys) | Qualquer chave da conta |
 
 Para guardar a chave, use **Ajustes › Chaves de API › Definir a chave…** e cole-a no campo protegido. Pelo Terminal, o app pede a chave sem mostrá-la na tela:
 
@@ -136,7 +143,30 @@ Para guardar a chave, use **Ajustes › Chaves de API › Definir a chave…** e
 "/Applications/AERES Bar.app/Contents/MacOS/AERESBar" --set-key openrouter
 ```
 
-Também dá para passar a chave por um pipe, por exemplo `pbpaste | "/Applications/AERES Bar.app/Contents/MacOS/AERESBar" --set-key ollama`. Para apagar, use `--delete-key openrouter` ou `--delete-key ollama`. Sem chave guardada, o app usa as variáveis `OPENROUTER_API_KEY` e `OLLAMA_API_KEY`, se existirem no ambiente dele.
+As contas aceitas são `openrouter`, `ollama`, `glm`, `kimi-code`, `moonshot` (Kimi API), `minimax` e `deepseek`. Também dá para passar a chave por um pipe, por exemplo `pbpaste | "/Applications/AERES Bar.app/Contents/MacOS/AERESBar" --set-key deepseek`, e apagar com `--delete-key <conta>`. Sem chave guardada, o app usa as variáveis de ambiente das próprias ferramentas (`OPENROUTER_API_KEY`, `OLLAMA_API_KEY`, `ZAI_API_KEY`, `MOONSHOT_API_KEY`, `MINIMAX_API_KEY`, `DEEPSEEK_API_KEY`…), se existirem no ambiente dele.
+
+## Modelos chineses
+
+Cada plataforma chinesa expõe o uso de um jeito. O AERES Bar usa, em cada uma, a fonte mais confiável que existe:
+
+| Provedor | O que aparece | Como o app lê | Credencial usada |
+| --- | --- | --- | --- |
+| **GLM (Z.ai / Zhipu)** | GLM Coding Plan: sessão de 5 h e semana (em créditos ou tokens) e a cota mensal de ferramentas MCP | `GET /api/monitor/usage/quota/limit` em `api.z.ai` ou `open.bigmodel.cn`, o mesmo do plugin oficial de uso | A chave guardada; a do Claude Code configurado para o GLM; ou a do Coding Tool Helper (`~/.chelper`) |
+| **Kimi Code** | Assinatura do Kimi Code: sessão de 5 h, semana (planos antigos) e mês | `GET /coding/v1/usages` em `api.kimi.ai` ou `api.kimi.com`, o mesmo do `/usage` do Kimi Code CLI | O login do Kimi Code CLI (`~/.kimi-code`); a chave guardada; ou o Claude Code configurado para o Kimi |
+| **Kimi API** | Saldo da plataforma aberta, em dólar (internacional) ou yuan (China) | `GET /v1/users/me/balance` em `api.moonshot.ai` ou `api.moonshot.cn` | A chave guardada, ou a do Claude Code configurado para a plataforma |
+| **MiniMax** | Token Plan: sessão de 5 h e semana | `GET /v1/token_plan/remains` em `api.minimax.io` ou `api.minimaxi.com` | A chave guardada; a do Claude Code configurado para o MiniMax; ou a do CLI oficial (`~/.mmx`) |
+| **DeepSeek** | Saldo, com a parte recarregada e a de bônus | `GET /user/balance`, o único endpoint de conta da API | A chave guardada; ou a do Claude Code ou do Codex configurados para o DeepSeek |
+| **Qwen (Model Studio)** | Coding Plan: sessão de 5 h, semana e mês de cobrança | CLI oficial do Model Studio: `bl usage coding-plan` | O login do `bl` (`npm install -g bailian-cli` e `bl auth login --console`) |
+| **Doubao (Volcengine)** | Coding Plan e Agent Plan: sessão, semana e mês | CLI oficial do Volcengine: `arkcli usage plan` | O login do `arkcli` (`npm i -g @volcengine/ark-cli` e `arkcli auth login`) |
+
+O que vale saber:
+
+- **Região detectada sozinha.** As chaves dessas plataformas só valem na região que as emitiu (internacional ou China continental). O app tenta as duas e passa a usar a que aceitou a chave.
+- **Logins que você já configurou.** Quem usa GLM, Kimi, MiniMax ou DeepSeek pelo Claude Code tem a chave em `~/.claude/settings.json`; o app a lê só quando o `ANTHROPIC_BASE_URL` de lá aponta para aquele provedor, e a chave só vai para ele. Os logins dos CLIs oficiais também são lidos, nunca renovados: quando vencem, o painel pede para usar a ferramenta uma vez.
+- **Endpoints sem documentação pública.** Os do GLM e do Kimi Code vêm do código das ferramentas oficiais e já mudaram de formato; o app aceita as variações conhecidas (por exemplo, no Kimi Code, vale o maior entre a razão e as contagens, porque o servidor às vezes informa 0% com a cota esgotada).
+- **DeepSeek e Kimi API mostram saldo, não limites:** não têm janelas de uso, então aparecem no painel mas não nos anéis nem no medidor.
+- **Qwen e Doubao pelos CLIs oficiais.** O Coding Plan do Model Studio não tem API que aceite a chave dele, e a chave do Ark (a que o Claude Code usa) não lê o uso do plano. O app não pede a AccessKey/SecretKey da conta, que dá acesso a tudo: roda o CLI de cada fornecedor, que tem o próprio login, e só se a pasta de login dele existir. O plano gratuito do Qwen Code (login Qwen OAuth) acabou em 2026-04-15.
+- **Fora, por enquanto: SiliconFlow.** A API de saldo foi desligada na China em 2026-08-14 e, no site internacional, voltou a informar saldos zerados.
 
 ## De onde vêm os números
 
@@ -148,12 +178,13 @@ Também dá para passar a chave por um pipe, por exemplo `pbpaste | "/Applicatio
 | **GitHub Copilot** | API do GitHub (`GET /copilot_internal/user`, a mesma das extensões do Copilot): requisições premium, chat e autocompletar do mês, com o login do `gh` (`gh auth token`, `hosts.yml`), dos plugins do Copilot (`~/.config/github-copilot`) ou `GH_TOKEN`/`GITHUB_TOKEN` | O Copilot não expõe contagem de tokens |
 | **Ollama** | API do Ollama Cloud (`GET https://ollama.com/api/usage`): sessão de 5 h e semanal, com a chave da API | Servidor local (`/api/version`, `/api/ps`, respeita `OLLAMA_HOST`): versão e modelos carregados. Modelos locais não têm limite |
 | **OpenRouter** | API do OpenRouter (`GET /api/v1/key`): limite de gasto da chave (diário, semanal, mensal ou fixo) e cota diária de modelos gratuitos | Gasto do dia, da semana e do mês; saldo de créditos (`/api/v1/credits`) com chave de gerenciamento |
+| **Modelos chineses** | Veja [Modelos chineses](#modelos-chineses) | Saldo do DeepSeek e da Kimi API; parte do Kimi Code na cota mensal do Kimi; chamadas de ferramentas MCP do GLM |
 
 Detalhes que valem saber:
 
 - **As porcentagens vêm dos provedores** e incluem o uso em qualquer dispositivo, como o app e a web. **Os tokens vêm dos logs deste Mac** e contam apenas o que rodou aqui. As respostas são deduplicadas: o Claude Code grava a mesma resposta uma vez por bloco de conteúdo, e o Codex repete eventos `token_count`.
 - **Janela "começa no próximo uso":** o Codex e o Antigravity informam janelas ainda não usadas com uma renovação que anda junto com o relógio. Nesse caso o painel diz isso em vez de mostrar uma contagem regressiva falsa.
-- **Horários de renovação:** o Copilot renova no primeiro dia do mês; o OpenRouter, à meia-noite UTC (semanas de segunda a domingo). O Ollama Cloud não informa quando as janelas renovam, então o painel mostra só o uso.
+- **Horários de renovação:** o Copilot renova no primeiro dia do mês; o OpenRouter, à meia-noite UTC (semanas de segunda a domingo); as plataformas chinesas informam o horário exato, e as semanas delas viram na segunda-feira à meia-noite de Pequim. O Ollama Cloud não informa quando as janelas renovam, então o painel mostra só o uso.
 - **Consulta gentil às APIs:** nas atualizações automáticas, uma resposta recente é reaproveitada (3 min na Anthropic, cujo limite de requisições é apertado, e 1 min nas demais), então passar o mouse não gera uma chamada. **Atualizar agora** consulta na hora, mas não mais que uma vez a cada 15 s. Um HTTP 429 respeita o `Retry-After`, entre 30 s e 30 min, ou pausa 5 min, inclusive para o botão.
 - **O Antigravity só responde enquanto está aberto.** O AERES Bar localiza o processo `language_server` (`ps`), a porta em escuta (`lsof`) e o token CSRF da linha de comando do processo.
 - **Credenciais expiradas não são renovadas pelo app.** Isso é de propósito: renovar um OAuth rotaciona o *refresh token* e poderia deslogar o Claude Code ou o Codex. Quando você volta a usar a ferramenta, ela renova sozinha e o AERES Bar volta a ler.
@@ -161,7 +192,8 @@ Detalhes que valem saber:
 ## Privacidade e segurança
 
 - Tudo roda localmente. O app não envia telemetria nem tem servidor próprio.
-- Cada credencial só vai para o servidor oficial do seu provedor, por HTTPS: `api.anthropic.com`, `chatgpt.com`, `api.github.com`, `ollama.com` e `openrouter.ai`. O app nunca a grava em arquivos, no cache ou nos logs.
+- Cada credencial só vai para o servidor oficial do seu provedor, por HTTPS: `api.anthropic.com`, `chatgpt.com`, `api.github.com`, `ollama.com`, `openrouter.ai`, `api.z.ai` / `open.bigmodel.cn`, `api.kimi.ai` / `api.kimi.com`, `api.moonshot.ai` / `api.moonshot.cn`, `api.minimax.io` / `api.minimaxi.com` e `api.deepseek.com`. O app nunca a grava em arquivos, no cache ou nos logs.
+- Chaves e logins que outras ferramentas já guardam (Claude Code, Codex, Kimi Code CLI, MiniMax CLI, Coding Tool Helper do Z.ai) são só lidos. O Qwen e o Doubao são lidos rodando os CLIs oficiais (`bl`, `arkcli`), apenas se a pasta de login deles existir.
 - As chaves de API ficam só no Chaves do macOS (serviço *AERES Bar*). São gravadas pelo `/usr/bin/security` com a chave enviada pela entrada padrão, nunca como argumento de linha de comando, que outros processos poderiam listar.
 - O cache (`~/Library/Application Support/AERES Bar/snapshots.json`) guarda só números, datas e textos exibidos.
 - O certificado autoassinado do Antigravity é aceito **apenas** para `127.0.0.1`, `localhost` e `::1`.
@@ -181,7 +213,10 @@ Veja também [SECURITY.md](SECURITY.md).
 | Copilot: "Nenhum login do GitHub encontrado" | Instale o GitHub CLI e rode `gh auth login` |
 | Copilot: "Esta conta do GitHub não tem o Copilot ativo" | Ative o Copilot (há um plano gratuito) em github.com/settings/copilot |
 | Ollama: "O servidor do Ollama está parado" | Abra o Ollama, ou defina a chave do Ollama Cloud para ver os limites da nuvem |
-| OpenRouter ou Ollama: "A chave … foi recusada" | Crie outra chave e use **Ajustes › Chaves de API › Trocar a chave…** |
+| "A chave do … foi recusada" | Confira se a chave é do tipo certo (no MiniMax, a *Subscription Key*). Se preciso, crie outra e use **Ajustes › Chaves de API › Trocar a chave…** |
+| GLM: "Esta chave não tem um GLM Coding Plan ativo" | A chave é de uma conta sem Coding Plan: use a da conta que tem a assinatura |
+| Kimi Code: "O login do Kimi Code expirou" | Use o Kimi Code CLI uma vez (ou rode `/login` nele) |
+| Qwen ou Doubao: "Rode … auth login" | Instale o CLI oficial (`bl` ou `arkcli`) e entre nele pelo Terminal |
 | Números estranhos | Rode o diagnóstico abaixo e abra uma issue com a saída (sem e-mails) |
 
 Diagnóstico e logs:
@@ -230,7 +265,7 @@ flowchart LR
     App["AERESBar<br/>(executável)<br/>composição + CLI"] --> UI["AERESBarUI<br/>AppKit + SwiftUI<br/>barra, painel, marcas"]
     App --> Core
     UI --> Core["AERESBarCore<br/>Foundation apenas<br/>modelos, provedores, estado"]
-    Core --> P1["Claude · Codex · Antigravity"] & P2["Copilot · Ollama · OpenRouter"]
+    Core --> P1["Claude · Codex · Antigravity"] & P2["Copilot · Ollama · OpenRouter"] & P3["GLM · Kimi · MiniMax<br/>DeepSeek · Qwen · Doubao"]
 ```
 
 - **AERESBarCore** não importa AppKit. Tem os modelos, os parsers das APIs, os leitores incrementais de log, os provedores (um `actor` cada), o `UsageStore` (`@Observable`, fonte única de verdade), as preferências e os textos exibidos (`BarPresenter`, `UsagePresentation`), todos testáveis.
@@ -239,7 +274,7 @@ flowchart LR
 
 ### Testes
 
-- **Swift Testing**, com mais de 160 testes: parsers com fixtures das respostas reais anonimizadas, leitores de log com arquivos temporários (incluindo linhas parciais e truncamento), provedores com HTTP, processos, credenciais, chaves e relógio falsos (401, 403, 429 com `Retry-After`, credencial expirada, troca e remoção de chave, fallback para logs, Antigravity fechado, servidor do Ollama parado), store, persistência, preferências, gravação de chaves pela entrada padrão, parser SVG, renderização das marcas, do medidor e do painel, e o menu de ajustes.
+- **Swift Testing**, com mais de 210 testes: parsers com fixtures das respostas reais anonimizadas, leitores de log com arquivos temporários (incluindo linhas parciais e truncamento), provedores com HTTP, processos, credenciais, chaves e relógio falsos (401, 403, 429 com `Retry-After`, credencial expirada, troca e remoção de chave, fallback para logs, Antigravity fechado, servidor do Ollama parado, troca de região, erro no corpo de respostas 200, CLIs oficiais sem login), store, persistência, preferências, gravação de chaves pela entrada padrão, parser SVG, renderização das marcas, do medidor e do painel, e o menu de ajustes.
 - Cobertura mínima verificada no CI: **85% em `AERESBarCore`** (hoje ~94%) e **60% em `AERESBarUI`**. A cola com AppKit (item da barra, janela, `SMAppService`) precisa de sessão gráfica e é verificada manualmente.
 
 ### Convenções
@@ -282,7 +317,7 @@ Sem os segredos abaixo, a release sai com assinatura ad-hoc e o macOS pede confi
 
 ## Marcas
 
-Claude e Anthropic são marcas da Anthropic, PBC. OpenAI, ChatGPT e Codex são marcas da OpenAI. Google e Antigravity são marcas da Google LLC. GitHub e GitHub Copilot são marcas da GitHub, Inc. Ollama é marca da Ollama, Inc. OpenRouter é marca da OpenRouter, Inc. As marcas aparecem só para identificar cada serviço. As do Claude, do Codex e do Antigravity foram extraídas dos arquivos que os próprios fornecedores distribuem; a do Copilot vem dos [Octicons](https://github.com/primer/octicons) do GitHub; as do Ollama e do OpenRouter, do [Simple Icons](https://simpleicons.org). O AERES Bar não é afiliado a nenhuma dessas empresas.
+Claude e Anthropic são marcas da Anthropic, PBC. OpenAI, ChatGPT e Codex são marcas da OpenAI. Google e Antigravity são marcas da Google LLC. GitHub e GitHub Copilot são marcas da GitHub, Inc. Ollama é marca da Ollama, Inc. OpenRouter é marca da OpenRouter, Inc. GLM, Z.ai e Zhipu são marcas da Zhipu AI; Kimi e Moonshot, da Moonshot AI; MiniMax, da MiniMax; DeepSeek, da DeepSeek; Qwen e Model Studio, do Alibaba Group; Doubao e Volcengine, da ByteDance. As marcas aparecem só para identificar cada serviço. As do Claude, do Codex e do Antigravity foram extraídas dos arquivos que os próprios fornecedores distribuem; a do Copilot vem dos [Octicons](https://github.com/primer/octicons) do GitHub; as do Ollama e do OpenRouter, do [Simple Icons](https://simpleicons.org); as das plataformas chinesas, do [lobe-icons](https://github.com/lobehub/lobe-icons) (MIT). O AERES Bar não é afiliado a nenhuma dessas empresas.
 
 ## Licença
 

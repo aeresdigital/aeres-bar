@@ -32,6 +32,23 @@ struct PanelRootView: View {
                 actions: actions
             )
             Divider().opacity(0.6)
+            if state.maxScrollHeight.isFinite {
+                // Everything below the header scrolls once it no longer fits under the menu bar.
+                ScrollView(.vertical) {
+                    body(shown: shown, absent: absent, rings: rings, now: now)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .frame(maxHeight: state.maxScrollHeight)
+            } else {
+                // No limit (previews, documentation images): ImageRenderer cannot draw the content
+                // of a ScrollView, which AppKit backs on macOS.
+                body(shown: shown, absent: absent, rings: rings, now: now)
+            }
+        }
+    }
+
+    private func body(shown: [ProviderID], absent: [ProviderID], rings: [SummaryRing], now: Date) -> some View {
+        VStack(spacing: 0) {
             if !rings.isEmpty {
                 SummaryRow(rings: rings, expanded: state.expanded) { state.toggle($0) }
                 Divider().opacity(0.6)

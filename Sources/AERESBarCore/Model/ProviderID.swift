@@ -6,6 +6,14 @@ public enum ProviderID: String, CaseIterable, Codable, Identifiable, Sendable {
     case copilot
     case ollama
     case openrouter
+    // Chinese model platforms.
+    case glm
+    case kimi
+    case moonshot
+    case minimax
+    case deepseek
+    case qwen
+    case doubao
 
     public var id: String { rawValue }
 
@@ -18,6 +26,13 @@ public enum ProviderID: String, CaseIterable, Codable, Identifiable, Sendable {
         case .copilot: "GitHub Copilot"
         case .ollama: "Ollama"
         case .openrouter: "OpenRouter"
+        case .glm: "GLM (Z.ai)"
+        case .kimi: "Kimi Code"
+        case .moonshot: "Kimi API"
+        case .minimax: "MiniMax"
+        case .deepseek: "DeepSeek"
+        case .qwen: "Qwen (Model Studio)"
+        case .doubao: "Doubao (Volcengine)"
         }
     }
 
@@ -30,6 +45,13 @@ public enum ProviderID: String, CaseIterable, Codable, Identifiable, Sendable {
         case .copilot: "Copilot"
         case .ollama: "Ollama"
         case .openrouter: "OpenRouter"
+        case .glm: "GLM"
+        case .kimi: "Kimi"
+        case .moonshot: "Kimi API"
+        case .minimax: "MiniMax"
+        case .deepseek: "DeepSeek"
+        case .qwen: "Qwen"
+        case .doubao: "Doubao"
         }
     }
 }

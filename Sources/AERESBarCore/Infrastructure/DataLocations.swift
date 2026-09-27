@@ -17,6 +17,64 @@ public enum DataLocations {
         return roots
     }
 
+    /// Claude Code's user settings, where third-party coding plans set `ANTHROPIC_BASE_URL`.
+    public static var claudeSettingsFiles: [URL] {
+        var files = [home.appendingPathComponent(".claude/settings.json")]
+        if let custom = environment["CLAUDE_CONFIG_DIR"], !custom.isEmpty {
+            files.insert(URL(fileURLWithPath: custom).appendingPathComponent("settings.json"), at: 0)
+        }
+        return files
+    }
+
+    /// Kimi Code CLI homes: the current CLI (`KIMI_CODE_HOME`, `~/.kimi-code`) and the legacy one
+    /// (`KIMI_SHARE_DIR`, `~/.kimi`).
+    public static var kimiCodeHomes: [URL] {
+        var homes: [URL] = []
+        if let custom = environment["KIMI_CODE_HOME"], !custom.isEmpty { homes.append(URL(fileURLWithPath: custom)) }
+        homes.append(home.appendingPathComponent(".kimi-code"))
+        if let legacy = environment["KIMI_SHARE_DIR"], !legacy.isEmpty { homes.append(URL(fileURLWithPath: legacy)) }
+        homes.append(home.appendingPathComponent(".kimi"))
+        return homes
+    }
+
+    /// Where vendor CLIs installed with npm, Homebrew and friends end up (a GUI app has no shell
+    /// `PATH`), newest Node version first for nvm.
+    public static var cliSearchDirectories: [URL] {
+        var directories = ["/opt/homebrew/bin", "/usr/local/bin"].map { URL(fileURLWithPath: $0) }
+        for relative in [".local/bin", ".npm-global/bin", ".volta/bin", ".bun/bin", "Library/pnpm", ".asdf/shims", ".bailian/bin"] {
+            directories.append(home.appendingPathComponent(relative))
+        }
+        let nvm = home.appendingPathComponent(".nvm/versions/node")
+        let versions = (try? FileManager.default.contentsOfDirectory(atPath: nvm.path)) ?? []
+        for version in versions.sorted(by: { $0.compare($1, options: .numeric) == .orderedDescending }) {
+            directories.append(nvm.appendingPathComponent(version).appendingPathComponent("bin"))
+        }
+        return directories
+    }
+
+    /// The official MiniMax CLI's configuration (`MMX_CONFIG_DIR` is honoured).
+    public static var minimaxCLIConfig: URL {
+        let folder =
+            environment["MMX_CONFIG_DIR"].flatMap { $0.isEmpty ? nil : URL(fileURLWithPath: $0) } ?? home.appendingPathComponent(".mmx")
+        return folder.appendingPathComponent("config.json")
+    }
+
+    /// Volcengine's `arkcli` keeps its login here.
+    public static var arkCLIHome: URL {
+        home.appendingPathComponent(".arkcli")
+    }
+
+    /// Alibaba Model Studio's `bl` keeps its login here (`BAILIAN_CONFIG_DIR` is honoured).
+    public static var bailianConfig: URL {
+        if let custom = environment["BAILIAN_CONFIG_DIR"], !custom.isEmpty { return URL(fileURLWithPath: custom) }
+        return home.appendingPathComponent(".bailian")
+    }
+
+    /// Z.ai's Coding Tool Helper configuration (`api_key`, `plan`).
+    public static var glmHelperConfig: URL {
+        home.appendingPathComponent(".chelper/config.yaml")
+    }
+
     /// Claude Code's credentials file, used where the Keychain is unavailable.
     public static var claudeCredentialsFile: URL {
         home.appendingPathComponent(".claude/.credentials.json")

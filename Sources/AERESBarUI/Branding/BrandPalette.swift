@@ -13,6 +13,13 @@ public enum BrandPalette {
         case .copilot: Color(red: 0.537, green: 0.341, blue: 0.898)  // #8957E5, Copilot purple
         case .ollama: Color(red: 0.455, green: 0.498, blue: 0.557)  // #747F8E, Ollama's mark is monochrome
         case .openrouter: Color(red: 0.392, green: 0.404, blue: 0.949)  // #6467F2, OpenRouter indigo
+        case .glm: Color(red: 0.220, green: 0.349, blue: 1.000)  // #3859FF, Zhipu blue
+        case .kimi: Color(red: 0.090, green: 0.514, blue: 1.000)  // #1783FF, Kimi's dot
+        case .moonshot: Color(red: 0.059, green: 0.373, blue: 0.820)  // #0F5FD1, a deeper Kimi blue for the API
+        case .minimax: Color(red: 0.906, green: 0.208, blue: 0.384)  // #E73562, MiniMax
+        case .deepseek: Color(red: 0.302, green: 0.420, blue: 0.996)  // #4D6BFE, DeepSeek's whale
+        case .qwen: Color(red: 0.412, green: 0.314, blue: 0.937)  // #6950EF, Qwen purple
+        case .doubao: Color(red: 0.118, green: 0.216, blue: 0.988)  // #1E37FC, Doubao blue
         }
     }
 
@@ -21,8 +28,9 @@ public enum BrandPalette {
         switch provider {
         case .claude: AnyShapeStyle(accent(for: .claude))
         case .antigravity: AnyShapeStyle(antigravityGradient)
-        // OpenAI's, GitHub's, Ollama's and OpenRouter's marks are monochrome.
-        case .codex, .copilot, .ollama, .openrouter: AnyShapeStyle(.primary)
+        case .deepseek, .qwen, .minimax, .doubao: AnyShapeStyle(accent(for: provider))
+        // OpenAI's, GitHub's, Ollama's, OpenRouter's, Kimi's and Z.ai's marks are monochrome.
+        case .codex, .copilot, .ollama, .openrouter, .kimi, .moonshot, .glm: AnyShapeStyle(.primary)
         }
     }
 

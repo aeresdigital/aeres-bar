@@ -87,6 +87,13 @@ struct InfrastructureTests {
         #expect(output.stdout.count == 1_000_000)
     }
 
+    @Test("O PATH do comando inclui a pasta dele e as de instalação (scripts de Node)")
+    func pathForScripts() throws {
+        let output = try #require(ProcessCommandRunner().run("/usr/bin/env", [], timeout: 5))
+        let path = output.text.split(separator: "\n").first { $0.hasPrefix("PATH=") }.map { String($0.dropFirst(5)) } ?? ""
+        #expect(path.hasPrefix("/usr/bin:/opt/homebrew/bin:/usr/local/bin:"))
+    }
+
     @Test("Entrega a entrada padrão ao comando")
     func standardInput() throws {
         let output = try #require(ProcessCommandRunner().run("/bin/cat", [], input: Data("segredo\n".utf8), timeout: 5))
@@ -197,7 +204,7 @@ struct KeychainSecretStoreTests {
     @Test(
         "Recusa chaves que não parecem chaves, sem chamar o `security`",
         arguments: [
-            "", "curta", "tem espaço no meio", "aspas\"no-meio", "barra\\invertida", "acentuação-não", String(repeating: "a", count: 513),
+            "", "curta", "tem espaço no meio", "aspas\"no-meio", "barra\\invertida", "acentuação-não", String(repeating: "a", count: 4_097),
         ]
     )
     func rejectsMalformedKeys(key: String) {
@@ -227,6 +234,17 @@ struct KeychainSecretStoreTests {
         }
     }
 
+    @Test("make uninstall apaga a chave de todas as contas")
+    func uninstallCoversEveryAccount() throws {
+        let script = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("scripts/uninstall.sh")
+        let text = try String(contentsOf: script, encoding: .utf8)
+        let line = try #require(text.split(separator: "\n").first { $0.hasPrefix("for account in") })
+        let listed = Set(line.dropFirst("for account in".count).split(separator: ";")[0].split(separator: " ").map(String.init))
+        #expect(listed == Set(SecretAccount.allCases.map(\.rawValue)))
+    }
+
     @Test("Contas de chave e seus provedores")
     func accounts() {
         #expect(SecretAccount(provider: .openrouter) == .openRouter)
@@ -235,7 +253,7 @@ struct KeychainSecretStoreTests {
         for account in SecretAccount.allCases {
             #expect(SecretAccount(provider: account.provider) == account)
             #expect(account.keysPage?.scheme == "https")
-            #expect(account.environmentVariable.hasSuffix("_API_KEY"))
+            #expect(!account.environmentVariables.isEmpty && account.environmentVariables.allSatisfy { $0.hasSuffix("_API_KEY") })
         }
     }
 }

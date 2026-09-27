@@ -126,10 +126,13 @@ public enum UsagePresentation {
         return "Atualizado \(Formatting.relative(latest, now: now))"
     }
 
-    /// "Não configurados: Ollama, OpenRouter".
+    /// "Não configurados: Ollama, OpenRouter", or "…: DeepSeek, Kimi, GLM e mais 3" when many.
     public static func unconfiguredLine(for providers: [ProviderID]) -> String? {
         guard !providers.isEmpty else { return nil }
-        return "Não configurados: " + providers.map(\.displayName).joined(separator: ", ")
+        let names = providers.map(\.shortName)
+        let listed =
+            names.count > 4 ? names.prefix(3).joined(separator: ", ") + " e mais \(names.count - 3)" : names.joined(separator: ", ")
+        return "Não configurados: " + listed
     }
 
     /// VoiceOver description of a window row.

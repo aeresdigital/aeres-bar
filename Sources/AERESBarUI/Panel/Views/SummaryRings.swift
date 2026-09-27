@@ -10,35 +10,57 @@ struct SummaryRow: View {
     let expanded: Set<ProviderID>
     let onSelect: @MainActor (ProviderID) -> Void
 
+    /// Up to six rings per row; more providers wrap into balanced rows (seven make 4 + 3).
+    static let maxPerRow = 6
+
     var body: some View {
-        let diameter = Self.diameter(for: rings.count)
-        HStack(spacing: 0) {
-            ForEach(rings) { ring in
-                Button {
-                    onSelect(ring.provider)
-                } label: {
-                    RingGauge(ring: ring, diameter: diameter)
-                        .padding(.vertical, 7)
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(Color.primary.opacity(expanded.contains(ring.provider) ? 0.07 : 0))
-                        )
-                        .contentShape(Rectangle())
+        let perRow = Self.perRow(for: rings.count)
+        let cell = (PanelRootView.width - 16) / CGFloat(max(perRow, 1))
+        let diameter = Self.diameter(for: perRow)
+        VStack(spacing: 2) {
+            ForEach(Array(stride(from: 0, to: rings.count, by: max(perRow, 1))), id: \.self) { start in
+                HStack(spacing: 0) {
+                    ForEach(rings[start..<min(start + perRow, rings.count)]) { ring in
+                        cellButton(ring, diameter: diameter)
+                            .frame(width: cell)
+                    }
                 }
-                .buttonStyle(.plain)
-                .help(ring.description)
-                .accessibilityLabel(ring.description)
-                .accessibilityHint("Mostra os detalhes do provedor")
+                .frame(maxWidth: .infinity)
             }
         }
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
     }
 
-    /// As big as the Apple Watch rings allow while six still share the panel's width.
-    static func diameter(for count: Int) -> CGFloat {
-        let cell = (PanelRootView.width - 16) / CGFloat(max(count, 1))
+    private func cellButton(_ ring: SummaryRing, diameter: CGFloat) -> some View {
+        Button {
+            onSelect(ring.provider)
+        } label: {
+            RingGauge(ring: ring, diameter: diameter)
+                .padding(.vertical, 7)
+                .frame(maxWidth: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.primary.opacity(expanded.contains(ring.provider) ? 0.07 : 0))
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(ring.description)
+        .accessibilityLabel(ring.description)
+        .accessibilityHint("Mostra os detalhes do provedor")
+    }
+
+    /// Rings per row: all in one row up to six, then as even as possible.
+    static func perRow(for count: Int) -> Int {
+        guard count > maxPerRow else { return max(count, 1) }
+        let rows = (count + maxPerRow - 1) / maxPerRow
+        return (count + rows - 1) / rows
+    }
+
+    /// As big as the Apple Watch rings allow while a full row still shares the panel's width.
+    static func diameter(for perRow: Int) -> CGFloat {
+        let cell = (PanelRootView.width - 16) / CGFloat(max(perRow, 1))
         return min(52, max(34, cell - 18))
     }
 }
