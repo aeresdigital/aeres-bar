@@ -79,17 +79,24 @@ public struct ProcessCommandRunner: CommandRunner {
     }
 }
 
-/// Reads a pipe to its end on a background queue.
+/// Reads a pipe to its end on a thread of its own.
+///
+/// Not on a dispatch queue: callers block while they wait (providers are actors, so on Swift
+/// concurrency's threads), and once every thread of that pool waits, the system starts no thread
+/// for work queued on the global queues either. The drains then never ran and every command ran
+/// into its timeout, which a Mac with few cores reached with a handful of providers.
 private final class PipeDrain: Sendable {
     private let buffer = OSAllocatedUnfairLock(initialState: Data())
     private let done = DispatchSemaphore(value: 0)
 
     init(_ handle: FileHandle) {
-        DispatchQueue.global(qos: .utility).async { [buffer, done] in
+        let thread = Thread { [buffer, done] in
             let data = handle.readDataToEndOfFile()
             buffer.withLock { $0 = data }
             done.signal()
         }
+        thread.qualityOfService = .utility
+        thread.start()
     }
 
     func wait(until deadline: DispatchTime) -> Bool {
