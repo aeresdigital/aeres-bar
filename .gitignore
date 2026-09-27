@@ -1,0 +1,14 @@
+# SwiftPM
+.build/
+.swiftpm/
+BuildTools/.build/
+*.xcodeproj
+xcuserdata/
+
+# Artefatos
+dist/
+preview/
+*.iconset/
+
+# macOS
+.DS_Store

@@ -1,0 +1,34 @@
+name: Problema
+description: Algo não funciona como deveria
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: O que aconteceu
+      description: O que você esperava ver e o que apareceu. Prints do painel ajudam.
+    validations:
+      required: true
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provedor
+      multiple: true
+      options: [Claude Code, Codex, Antigravity, Nenhum em especial]
+    validations:
+      required: true
+  - type: textarea
+    id: dump
+    attributes:
+      label: Saída do diagnóstico
+      description: |
+        Rode `"/Applications/AERES Bar.app/Contents/MacOS/AERESBar" --dump` e cole a parte do provedor.
+        Apague e-mails antes de enviar. O comando não mostra tokens.
+      render: json
+  - type: input
+    id: versions
+    attributes:
+      label: Versões
+      placeholder: "AERES Bar 1.0.0, macOS 27.0"
+    validations:
+      required: true

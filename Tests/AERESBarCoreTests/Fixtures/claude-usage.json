@@ -1,0 +1,22 @@
+{
+  "five_hour": {"utilization": 10.0, "resets_at": "2026-09-27T03:10:00.235980+00:00", "limit_dollars": null, "used_dollars": null, "remaining_dollars": null, "locked_reason": null},
+  "seven_day": {"utilization": 73.0, "resets_at": "2026-09-30T16:00:00.236001+00:00", "limit_dollars": null, "used_dollars": null, "remaining_dollars": null, "locked_reason": null},
+  "seven_day_oauth_apps": null,
+  "seven_day_opus": null,
+  "seven_day_sonnet": null,
+  "extra_usage": {"is_enabled": false, "monthly_limit": 11000, "used_credits": 0.0, "utilization": 0.0, "currency": "BRL", "decimal_places": 2, "disabled_reason": "out_of_credits"},
+  "limits": [
+    {"kind": "session", "group": "session", "percent": 10, "severity": "normal", "resets_at": "2026-09-27T03:09:59.970000+00:00", "scope": null, "is_active": false},
+    {"kind": "weekly_all", "group": "weekly", "percent": 73, "severity": "normal", "resets_at": "2026-09-30T16:00:00.236001+00:00", "scope": null, "is_active": true},
+    {"kind": "weekly_scoped", "group": "weekly", "percent": 16, "severity": "normal", "resets_at": "2026-09-30T16:00:00.236166+00:00", "scope": {"model": {"id": null, "display_name": "Fable"}, "surface": null}, "is_active": false}
+  ],
+  "seven_day_breakdown": {
+    "as_of": "2026-09-27T02:53:38.270074+00:00",
+    "rows": [
+      {"key": "claude_code", "display_name": "Claude Code", "percent": 96},
+      {"key": "chat", "display_name": "Chats", "percent": 0},
+      {"key": "cowork", "display_name": "Cowork", "percent": 3},
+      {"key": "other", "display_name": "Other", "percent": 1}
+    ]
+  }
+}

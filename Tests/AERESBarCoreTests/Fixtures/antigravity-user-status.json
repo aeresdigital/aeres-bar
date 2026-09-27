@@ -1,0 +1,17 @@
+{
+  "userStatus": {
+    "name": "Dev",
+    "email": "dev@example.com",
+    "planStatus": {"planInfo": {"teamsTier": "TEAMS_TIER_PRO", "planName": "Pro"}, "availablePromptCredits": 500},
+    "userTier": {"id": "free-tier", "name": "Antigravity Starter Quota"},
+    "cascadeModelConfigData": {
+      "clientModelConfigs": [
+        {"label": "Gemini 3.8 Flash (High)", "modelOrAlias": {"model": "MODEL_PLACEHOLDER_M318"}, "quotaInfo": {"remainingFraction": 1, "resetTime": "2026-10-04T03:00:41Z"}},
+        {"label": "Gemini 3.1 Pro (High)", "quotaInfo": {"remainingFraction": 1, "resetTime": "2026-10-04T03:00:41Z"}},
+        {"label": "Claude Opus 4.6 (Thinking)", "quotaInfo": {"remainingFraction": 0.2, "resetTime": "2026-10-01T00:00:00Z"}},
+        {"label": "GPT-OSS 120B (Medium)", "quotaInfo": {"resetTime": "2026-10-01T00:00:00Z"}},
+        {"label": "Legacy model without quota"}
+      ]
+    }
+  }
+}

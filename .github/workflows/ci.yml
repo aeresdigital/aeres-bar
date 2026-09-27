@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint (swift-format)
+    # Linux minutes are ~10x cheaper than macOS ones; swift-format only needs to parse the code.
+    runs-on: ubuntu-latest
+    container: swift:6.4-noble
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Cache do swift-format
+        uses: actions/cache@v6
+        with:
+          path: BuildTools/.build
+          key: swift-format-${{ runner.os }}-6.4-${{ hashFiles('BuildTools/Package.resolved') }}
+
+      - name: swift-format lint --strict
+        run: >-
+          swift run -c release --package-path BuildTools swift-format lint --strict --parallel --recursive
+          Package.swift BuildTools/Package.swift Sources Tests scripts/make_icon.swift
+
+  build-test:
+    name: Build, testes e cobertura (macOS)
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # build number = commit count
+
+      - name: Selecionar o Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Ferramentas
+        run: |
+          xcodebuild -version
+          swift --version
+
+      - name: Compilar (avisos são erros)
+        run: swift build -Xswiftc -warnings-as-errors
+
+      - name: Testes com cobertura
+        run: swift test --enable-code-coverage -Xswiftc -warnings-as-errors
+
+      - name: Cobertura mínima
+        run: SKIP_TESTS=1 scripts/coverage.sh
+
+      - name: Relatório de cobertura (lcov)
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-lcov
+          path: .build/coverage/coverage.lcov
+          retention-days: 14
+
+      - name: App universal e DMG
+        if: github.event_name == 'push'
+        run: |
+          UNIVERSAL=1 scripts/build_app.sh
+          scripts/make_dmg.sh
+
+      - name: Publicar DMG de desenvolvimento
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v7
+        with:
+          name: AERES-Bar-${{ github.sha }}
+          path: |
+            dist/*.dmg
+            dist/*.sha256
+          retention-days: 14
+          if-no-files-found: error

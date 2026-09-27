@@ -1,0 +1,5 @@
+    1 /sbin/launchd
+  468 /bin/zsh -c grep language_server antigravity
+ 1962 /Applications/Antigravity.app/Contents/Resources/bin/language_server --standalone --override_ide_name antigravity --https_server_port 0 --csrf_token 11111111-2222-3333-4444-555555555555 --app_data_dir antigravity
+ 2044 /Applications/Antigravity IDE.app/Contents/Resources/app/extensions/antigravity/bin/language_server_macos_arm --enable_lsp --extension_server_port 53210 --csrf_token=abcdef --app_data_dir antigravity
+ 3001 /Applications/Windsurf.app/Contents/Resources/app/extensions/windsurf/bin/language_server_macos_arm --csrf_token zzz

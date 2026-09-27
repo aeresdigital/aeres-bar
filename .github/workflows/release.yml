@@ -1,0 +1,83 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Publicar ${{ github.ref_name }}
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      # Signing and notarization run only when the Developer ID secrets are configured.
+      HAS_SIGNING: ${{ secrets.MACOS_CERTIFICATE != '' && secrets.NOTARY_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Selecionar o Xcode
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Conferir a versão e extrair as notas
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          expected="$(tr -d '[:space:]' < VERSION)"
+          if [[ "$version" != "$expected" ]]; then
+            echo "::error::A tag $GITHUB_REF_NAME não bate com o arquivo VERSION ($expected)."
+            exit 1
+          fi
+          echo "VERSION=$version" >> "$GITHUB_ENV"
+          scripts/release_notes.sh "$version" > "$RUNNER_TEMP/release-notes.md"
+
+      - name: Testes
+        run: swift test -Xswiftc -warnings-as-errors
+
+      - name: Importar o certificado Developer ID
+        if: env.HAS_SIGNING == 'true'
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: scripts/ci/import_certificate.sh
+
+      - name: App universal
+        run: UNIVERSAL=1 scripts/build_app.sh
+
+      - name: DMG
+        run: scripts/make_dmg.sh
+
+      - name: Notarizar
+        if: env.HAS_SIGNING == 'true'
+        env:
+          NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
+          NOTARY_ISSUER_ID: ${{ secrets.NOTARY_ISSUER_ID }}
+          NOTARY_KEY: ${{ secrets.NOTARY_KEY }}
+        run: |
+          scripts/notarize.sh "dist/AERES-Bar-$VERSION.dmg"
+          cd dist && shasum -a 256 "AERES-Bar-$VERSION.dmg" > "AERES-Bar-$VERSION.dmg.sha256"
+
+      - name: Aviso de build sem assinatura
+        if: env.HAS_SIGNING != 'true'
+        run: |
+          echo "::warning::Release sem Developer ID: o macOS pedirá confirmação na primeira abertura (veja o README)."
+          printf '\n> Build sem assinatura Developer ID. Na primeira abertura: clique com o botão direito no app › Abrir.\n' >> "$RUNNER_TEMP/release-notes.md"
+
+      - name: Publicar a release
+        uses: softprops/action-gh-release@v3
+        with:
+          name: AERES Bar ${{ env.VERSION }}
+          body_path: ${{ runner.temp }}/release-notes.md
+          files: |
+            dist/AERES-Bar-*.dmg
+            dist/AERES-Bar-*.dmg.sha256
+          fail_on_unmatched_files: true
