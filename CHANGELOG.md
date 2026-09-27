@@ -6,6 +6,15 @@ Todas as mudanças relevantes do AERES Bar. O formato segue o [Keep a Changelog]
 
 ### Adicionado
 
+- Modelos chineses, cada um pela fonte mais confiável que existe:
+  - **GLM (Z.ai / Zhipu):** sessão de 5 h, semana e cota mensal de ferramentas MCP do GLM Coding Plan.
+  - **Kimi Code:** sessão de 5 h, semana e mês da assinatura, com o login do Kimi Code CLI ou uma chave do console.
+  - **Kimi API:** saldo da plataforma aberta, em dólar ou yuan.
+  - **MiniMax:** sessão de 5 h e semana do Token Plan.
+  - **DeepSeek:** saldo recarregado e de bônus.
+  - **Qwen (Model Studio)** e **Doubao (Volcengine):** Coding Plan pelos CLIs oficiais (`bl` e `arkcli`) e o login deles.
+- Detecção da região (internacional ou China continental) de cada chave, e reaproveitamento das chaves que o Claude Code, o Codex e os CLIs oficiais já têm, só para leitura.
+- Chaves das plataformas chinesas no menu **Chaves de API** e no `--set-key` (`glm`, `kimi-code`, `moonshot`, `minimax`, `deepseek`).
 - GitHub Copilot: cotas do mês (requisições premium, chat e autocompletar) e plano, pela API do GitHub, com o login do GitHub CLI ou dos plugins do Copilot.
 - Ollama: limites de sessão (5 h) e semanal do Ollama Cloud, com a chave da API, e o servidor local com a versão e os modelos carregados.
 - OpenRouter: limite de gasto da chave (diário, semanal, mensal ou fixo), cota diária de modelos gratuitos, gasto do dia, da semana e do mês e saldo de créditos (com chave de gerenciamento).
@@ -16,6 +25,7 @@ Todas as mudanças relevantes do AERES Bar. O formato segue o [Keep a Changelog]
 
 ### Alterado
 
+- O resumo em anéis quebra em linhas de até seis, o painel rola abaixo do cabeçalho quando não cabe na tela, o medidor da barra alarga com mais de seis provedores e o rodapé cita até três provedores não configurados.
 - Um único item na barra de menus, no lugar de um por provedor: um medidor com uma barra por provedor e a porcentagem do mais perto do limite. Ao passar o mouse, o painel mostra todos os provedores de uma vez; clicar num provedor abre os detalhes dele.
 - **Atualizar agora** consulta as APIs na hora em vez de reaproveitar a resposta recente, respeitando um intervalo mínimo de 15 s e as pausas pedidas pelos provedores.
 - Os tokens de hoje, quando escolhidos como número da barra, somam todos os provedores.
