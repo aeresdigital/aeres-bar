@@ -213,3 +213,191 @@ struct AntigravityParserTests {
         #expect(LanguageServerLocator.argument("csrf_token", in: "x --csrf_token=zz --y") == "zz")
     }
 }
+
+@Suite("API do GitHub Copilot")
+struct CopilotUsageParserTests {
+    @Test("Plano Pro: requisições premium com excedente; chat e autocompletar ilimitados")
+    func pro() throws {
+        let result = try #require(CopilotUsageParser.parse(try Fixture.data("copilot-user-pro.json")))
+        #expect(result.plan == "Pro")
+        let premium = try #require(result.windows.first)
+        #expect(result.windows.count == 1)
+        #expect(premium.id == "copilot.premium_interactions")
+        #expect(premium.title == "Requisições premium")
+        #expect(premium.subtitle == "164 de 300 restantes no mês")
+        #expect(abs(premium.usedPercent - 45.33) < 0.001)
+        #expect(premium.isPrimary)
+        #expect(premium.resetsAt == iso("2026-10-01T00:00:00Z"))
+        #expect(premium.windowSeconds == Double(30 * 86_400))
+        #expect(
+            result.details == [
+                DetailRow(label: "Requisições premium além da cota", value: "12"),
+                DetailRow(label: "Chat", value: "ilimitado"),
+                DetailRow(label: "Autocompletar", value: "ilimitado"),
+            ])
+    }
+
+    @Test("Plano Free: chat e autocompletar com cota; premium sem direito fica de fora")
+    func free() throws {
+        let result = try #require(CopilotUsageParser.parse(try Fixture.data("copilot-user-free.json")))
+        #expect(result.plan == "Free")
+        #expect(result.windows.map(\.id) == ["copilot.chat", "copilot.completions"])
+        #expect(result.windows.map(\.usedPercent) == [81.5, 27.5])
+        #expect(result.windows.map(\.isPrimary) == [true, false])
+        #expect(result.windows.last?.subtitle == "1.450 de 2.000 restantes no mês")
+        #expect(result.details.isEmpty)
+    }
+
+    @Test("Sem percentual, calcula pelo restante; sem data UTC, usa a data do reset")
+    func derivedValues() throws {
+        let json = """
+            {"access_type_sku": "copilot_pro", "quota_reset_date": "2026-11-01",
+             "quota_snapshots": {"premium_interactions": {"entitlement": 300, "remaining": 75, "unlimited": false}}}
+            """
+        let window = try #require(CopilotUsageParser.parse(Data(json.utf8))?.windows.first)
+        #expect(window.usedPercent == 75)
+        #expect(window.resetsAt == iso("2026-11-01T00:00:00Z"))
+    }
+
+    @Test("Respostas inválidas", arguments: ["", "<html>", "{}", #"{"quota_snapshots": {}}"#])
+    func invalid(body: String) {
+        #expect(CopilotUsageParser.parse(Data(body.utf8)) == nil)
+    }
+
+    @Test(
+        "Nomes de plano",
+        arguments: [
+            ("free_limited_copilot", nil, "Free"),
+            ("free_educational_quota", nil, "Education"),
+            ("monthly_subscriber_quota", nil, "Pro"),
+            ("plus_yearly_subscriber_quota", nil, "Pro+"),
+            ("copilot_enterprise_seat", nil, "Enterprise"),
+            ("copilot_business_seat", nil, "Business"),
+            (nil, "individual_pro", "Individual Pro"),
+            (nil, " ", nil),
+            (nil, nil, nil),
+        ] as [(String?, String?, String?)]
+    )
+    func planNames(sku: String?, plan: String?, expected: String?) {
+        #expect(CopilotUsageParser.planName(sku: sku, plan: plan) == expected)
+    }
+}
+
+@Suite("Ollama Cloud e servidor local")
+struct OllamaParserTests {
+    @Test("Janelas de sessão e semanal, com o total de requisições")
+    func cloudUsage() throws {
+        let windows = try #require(OllamaParser.parseCloudUsage(try Fixture.data("ollama-usage.json")))
+        #expect(windows.map(\.id) == ["ollama.session", "ollama.weekly"])
+        #expect(windows.map(\.usedPercent) == [22.5, 58])
+        #expect(windows.map(\.subtitle) == ["48 requisições", "1.510 requisições"])
+        #expect(windows.map(\.windowSeconds) == [18_000, 604_800])
+        #expect(windows.map(\.isPrimary) == [true, false])
+        // The endpoint does not say when the windows renew.
+        #expect(windows.allSatisfy { $0.resetsAt == nil })
+    }
+
+    @Test("Aceita percentual em vez de fração e limita a 100%")
+    func percentages() throws {
+        let json = #"{"limits": {"weekly": {"usage": 140, "models": {"m": {"request_count": 1}}}}}"#
+        let window = try #require(OllamaParser.parseCloudUsage(Data(json.utf8))?.first)
+        #expect(window.usedPercent == 100)
+        #expect(window.subtitle == "1 requisição")
+        #expect(window.isPrimary)
+    }
+
+    @Test("Respostas inválidas", arguments: ["", "{}", #"{"limits": {}}"#, #"{"limits": {"monthly": {"usage": 0.1}}}"#])
+    func invalid(body: String) {
+        #expect(OllamaParser.parseCloudUsage(Data(body.utf8)) == nil)
+    }
+
+    @Test("Versão e modelos carregados no servidor local")
+    func localServer() throws {
+        #expect(OllamaParser.parseVersion(Data(#"{"version": "0.13.2"}"#.utf8)) == "0.13.2")
+        #expect(OllamaParser.parseVersion(Data("{}".utf8)) == nil)
+        let models = try #require(OllamaParser.parseLoadedModels(try Fixture.data("ollama-ps.json")))
+        #expect(
+            models == [
+                OllamaParser.LoadedModel(name: "qwen3-coder:30b", sizeBytes: 19_975_561_216, vramBytes: 19_975_561_216),
+                OllamaParser.LoadedModel(name: "nomic-embed-text:latest", sizeBytes: 849_813_504, vramBytes: 0),
+            ])
+        #expect(OllamaParser.parseLoadedModels(Data(#"{"models": []}"#.utf8)) == [])
+        #expect(OllamaParser.parseLoadedModels(Data("<html>".utf8)) == nil)
+    }
+}
+
+@Suite("API do OpenRouter")
+struct OpenRouterParserTests {
+    let now = Date(timeIntervalSince1970: 1_790_000_000)  // 2026-09-21 14:13 UTC, a Monday
+
+    /// Currency amounts keep "US$" and the number together with a no-break space.
+    private func plain(_ text: String?) -> String? {
+        text?.replacingOccurrences(of: "\u{00A0}", with: " ")
+    }
+
+    @Test("Chave com limite mensal e cota diária de modelos gratuitos")
+    func keyWithLimit() throws {
+        let key = try #require(OpenRouterParser.parseKey(try Fixture.data("openrouter-key.json")))
+        #expect(key.limit == 100)
+        #expect(key.limitReset == "monthly")
+        #expect(!key.isFreeTier)
+
+        let windows = OpenRouterParser.windows(for: key, now: now)
+        #expect(windows.map(\.id) == ["openrouter.limit", "openrouter.free"])
+        let limit = try #require(windows.first)
+        #expect(limit.title == "Limite da chave · mensal")
+        #expect(limit.usedPercent == 25.5)
+        #expect(plain(limit.subtitle) == "US$ 25,50 de US$ 100,00")
+        #expect(limit.resetsAt == iso("2026-10-01T00:00:00Z"))
+        #expect(limit.isPrimary)
+        let free = try #require(windows.last)
+        #expect(free.subtitle == "12 de 1.000 requisições")
+        #expect(abs(free.usedPercent - 1.2) < 0.0001)
+        #expect(free.resetsAt == iso("2026-09-22T00:00:00Z"))
+        #expect(!free.isPrimary)
+
+        let credits = try #require(OpenRouterParser.parseCredits(try Fixture.data("openrouter-credits.json")))
+        #expect(credits.balance == 74.75)
+        #expect(
+            OpenRouterParser.details(for: key, credits: credits).map { "\($0.label): \(plain($0.value) ?? "")" } == [
+                "Gasto: hoje US$ 1,20 · semana US$ 5,30 · mês US$ 25,50",
+                "Saldo: US$ 74,75 de US$ 100,50",
+            ])
+    }
+
+    @Test("Chave sem limite, no plano gratuito")
+    func freeKey() throws {
+        let key = try #require(OpenRouterParser.parseKey(try Fixture.data("openrouter-key-free.json")))
+        #expect(key.limit == nil)
+        #expect(key.isFreeTier)
+        let windows = OpenRouterParser.windows(for: key, now: now)
+        #expect(windows.map(\.id) == ["openrouter.free"])
+        #expect(windows.first?.usedPercent == 90)
+        #expect(windows.first?.isPrimary == true)
+        #expect(OpenRouterParser.details(for: key, credits: nil).last == DetailRow(label: "Limite da chave", value: "sem limite"))
+    }
+
+    @Test("Sem limit_remaining, o gasto vem do período do limite")
+    func spendFromPeriod() throws {
+        let json = #"{"data": {"limit": 10, "limit_reset": "weekly", "usage": 50, "usage_weekly": 4}}"#
+        let key = try #require(OpenRouterParser.parseKey(Data(json.utf8)))
+        let window = try #require(OpenRouterParser.windows(for: key, now: now).first)
+        #expect(window.usedPercent == 40)
+        #expect(window.title == "Limite da chave · semanal")
+        // Weeks run Monday to Sunday: the next Monday at midnight UTC.
+        #expect(window.resetsAt == iso("2026-09-28T00:00:00Z"))
+
+        let lifetime = try #require(OpenRouterParser.parseKey(Data(#"{"data": {"limit": 20, "usage": 5}}"#.utf8)))
+        let capped = try #require(OpenRouterParser.windows(for: lifetime, now: now).first)
+        #expect(capped.title == "Limite da chave")
+        #expect(capped.usedPercent == 25)
+        #expect(capped.resetsAt == nil)
+    }
+
+    @Test("Respostas inválidas")
+    func invalid() {
+        #expect(OpenRouterParser.parseKey(Data("{}".utf8)) == nil)
+        #expect(OpenRouterParser.parseKey(Data("<html>".utf8)) == nil)
+        #expect(OpenRouterParser.parseCredits(Data(#"{"data": {}}"#.utf8)) == nil)
+    }
+}

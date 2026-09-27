@@ -14,35 +14,54 @@ public struct CommandOutput: Sendable {
     }
 
     public var text: String { String(decoding: stdout, as: UTF8.self) }
+
+    /// Standard output without surrounding whitespace, or `nil` when the command failed or printed nothing.
+    public var trimmedOutput: String? {
+        guard status == 0 else { return nil }
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return value.isEmpty ? nil : value
+    }
 }
 
-/// Runs command-line tools (`ps`, `lsof`, `security`). Injected so tests can script the answers.
+/// Runs command-line tools (`ps`, `lsof`, `security`, `gh`). Injected so tests can script the answers.
 public protocol CommandRunner: Sendable {
-    /// Runs `executable` directly (no shell). Returns `nil` if it cannot start or exceeds `timeout`.
-    func run(_ executable: String, _ arguments: [String], timeout: TimeInterval) -> CommandOutput?
+    /// Runs `executable` directly (no shell), feeding `input` to its standard input.
+    /// Returns `nil` if it cannot start or exceeds `timeout`.
+    func run(_ executable: String, _ arguments: [String], input: Data?, timeout: TimeInterval) -> CommandOutput?
+}
+
+extension CommandRunner {
+    public func run(_ executable: String, _ arguments: [String], timeout: TimeInterval) -> CommandOutput? {
+        run(executable, arguments, input: nil, timeout: timeout)
+    }
 }
 
 public struct ProcessCommandRunner: CommandRunner {
     public init() {}
 
-    public func run(_ executable: String, _ arguments: [String], timeout: TimeInterval) -> CommandOutput? {
+    public func run(_ executable: String, _ arguments: [String], input: Data?, timeout: TimeInterval) -> CommandOutput? {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
         let outPipe = Pipe()
         let errPipe = Pipe()
+        let inPipe = Pipe()
         process.standardOutput = outPipe
         process.standardError = errPipe
-        process.standardInput = FileHandle.nullDevice
+        process.standardInput = input == nil ? FileHandle.nullDevice : inPipe
         do {
             try process.run()
         } catch {
             return nil
         }
-
-        // Drain both pipes concurrently: a full pipe would otherwise block the child forever.
+        // Drain both pipes concurrently (before feeding stdin): a full pipe would otherwise block the child forever.
         let stdout = PipeDrain(outPipe.fileHandleForReading)
         let stderr = PipeDrain(errPipe.fileHandleForReading)
+        if let input {
+            // Secrets go through stdin, never through arguments that other processes can list.
+            try? inPipe.fileHandleForWriting.write(contentsOf: input)
+            try? inPipe.fileHandleForWriting.close()
+        }
         let deadline = DispatchTime.now() + timeout
         guard stdout.wait(until: deadline), stderr.wait(until: deadline) else {
             process.terminate()

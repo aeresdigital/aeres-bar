@@ -2,7 +2,8 @@ import AERESBarCore
 import AppKit
 import Observation
 
-/// One menu bar item per provider: the brand mark plus the number chosen in the settings.
+/// The single menu bar item: a meter of every provider (or the most critical provider's logo)
+/// and the highest usage. Hovering opens the panel with all providers; a click pins it.
 @MainActor
 final class StatusBarController: NSObject {
     private static let titleFont = NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium)
@@ -10,16 +11,14 @@ final class StatusBarController: NSObject {
     private let store: UsageStore
     private let settings: AppSettings
     private let settingsMenu: SettingsMenu
-    private var items: [ProviderID: NSStatusItem] = [:]
-    private var trackers: [ProviderID: HoverTracker] = [:]
+    private var item: NSStatusItem?
+    private var tracker: HoverTracker?
     private var clock: Task<Void, Never>?
     private lazy var panel = PanelController(
         store: store,
         settings: settings,
         makeMenu: { [unowned self] in settingsMenu.makeMenu() },
-        isStatusItemWindow: { [unowned self] window in
-            window != nil && items.values.contains { $0.button?.window === window }
-        }
+        isStatusItemWindow: { [unowned self] window in window != nil && window === item?.button?.window }
     )
 
     init(store: UsageStore, settings: AppSettings, settingsMenu: SettingsMenu) {
@@ -30,9 +29,28 @@ final class StatusBarController: NSObject {
     }
 
     func install() {
-        // Each new status item lands left of the previous ones, so create them right-to-left.
-        for provider in ProviderID.allCases.reversed() {
-            makeItem(for: provider)
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        item.autosaveName = "AERESBar.main"
+        self.item = item
+
+        if let button = item.button {
+            button.imageHugsTitle = true
+            button.target = self
+            button.action = #selector(itemClicked(_:))
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            let tracker = HoverTracker { [weak self, weak button] inside in
+                guard let self, let button else { return }
+                if inside {
+                    panel.hoverBegan(anchor: button)
+                } else {
+                    panel.hoverEnded()
+                }
+            }
+            button.addTrackingArea(
+                NSTrackingArea(
+                    rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: tracker, userInfo: nil)
+            )
+            self.tracker = tracker
         }
         observeAndRender()
 
@@ -58,61 +76,34 @@ final class StatusBarController: NSObject {
         }
     }
 
-    private func makeItem(for provider: ProviderID) {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        item.autosaveName = "AERESBar.\(provider.rawValue)"
-        items[provider] = item
-
-        guard let button = item.button else { return }
-        button.image = BrandImage.template(for: provider)
-        button.imagePosition = .imageLeading
-        button.imageHugsTitle = true
-        button.identifier = NSUserInterfaceItemIdentifier(provider.rawValue)
-        button.target = self
-        button.action = #selector(itemClicked(_:))
-        button.sendAction(on: [.leftMouseUp, .rightMouseUp])
-
-        let tracker = HoverTracker(provider: provider) { [weak self, weak button] provider, inside in
-            guard let self, let button else { return }
-            if inside {
-                panel.hoverBegan(provider, anchor: button)
-            } else {
-                panel.hoverEnded()
-            }
-        }
-        button.addTrackingArea(
-            NSTrackingArea(rect: .zero, options: [.mouseEnteredAndExited, .activeAlways, .inVisibleRect], owner: tracker, userInfo: nil)
-        )
-        trackers[provider] = tracker
-    }
-
     @objc private func itemClicked(_ sender: NSStatusBarButton) {
-        guard let raw = sender.identifier?.rawValue, let provider = ProviderID(rawValue: raw) else { return }
         let event = NSApp.currentEvent
         if event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true {
             panel.hide()
-            guard let item = items[provider] else { return }
+            guard let item else { return }
             item.menu = settingsMenu.makeMenu()
             sender.performClick(nil)
             item.menu = nil
         } else {
-            panel.clicked(provider, anchor: sender)
+            panel.clicked(anchor: sender)
         }
     }
 
     private func render() {
-        let now = Date()
-        let config = settings.barConfig
-        let colorAlerts = settings.colorAlerts
-        for provider in ProviderID.allCases {
-            guard let item = items[provider] else { continue }
-            let visible = settings.isVisible(provider)
-            if item.isVisible != visible { item.isVisible = visible }
-            guard visible, let button = item.button else { continue }
+        guard let button = item?.button else { return }
+        let overall = BarPresenter.overall(for: store.snapshots, providers: store.providerIDs, config: settings.barConfig, now: Date())
 
-            let value = BarPresenter.value(for: store.snapshots[provider], config: config, now: now)
-            let text = " " + value.text
-            if colorAlerts, let alert = value.alert {
+        switch settings.barIconStyle {
+        case .meters:
+            button.image = MeterImage.template(levels: overall.levels.map(\.usedPercent))
+        case .criticalLogo:
+            button.image = BrandImage.template(for: overall.critical ?? store.providerIDs.first ?? .claude)
+        }
+
+        if settings.showPercentInBar {
+            button.imagePosition = .imageLeading
+            let text = " " + overall.text
+            if settings.colorAlerts, let alert = overall.alert {
                 button.attributedTitle = NSAttributedString(
                     string: text,
                     attributes: [.font: Self.titleFont, .foregroundColor: BrandPalette.color(for: alert)]
@@ -121,19 +112,19 @@ final class StatusBarController: NSObject {
                 button.font = Self.titleFont
                 button.title = text
             }
-            button.appearsDisabled = !value.hasData
-            button.setAccessibilityLabel(BarPresenter.accessibilityLabel(for: provider, value: value, now: now))
+        } else {
+            button.title = ""
+            button.imagePosition = .imageOnly
         }
+        button.appearsDisabled = !overall.hasData
+        button.setAccessibilityLabel(BarPresenter.accessibilityLabel(for: overall))
     }
 
-    /// One line in the unified log saying where each item landed, for troubleshooting.
+    /// One line in the unified log saying where the item landed, for troubleshooting.
     private func logPlacement() {
-        let lines = ProviderID.allCases.map { provider -> String in
-            guard let item = items[provider] else { return "\(provider.rawValue)=ausente" }
-            let frame = item.button?.window?.frame ?? .zero
-            return
-                "\(provider.rawValue)=\(item.isVisible ? "visível" : "oculto") x=\(Int(frame.minX)) y=\(Int(frame.minY)) w=\(Int(frame.width))"
-        }
-        Log.statusBar.notice("Itens na barra: \(lines.joined(separator: " · "), privacy: .public)")
+        let frame = item?.button?.window?.frame ?? .zero
+        Log.statusBar.notice(
+            "Item na barra: \(self.item?.isVisible == true ? "visível" : "oculto", privacy: .public) x=\(Int(frame.minX)) y=\(Int(frame.minY)) w=\(Int(frame.width))"
+        )
     }
 }

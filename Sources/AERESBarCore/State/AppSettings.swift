@@ -9,8 +9,10 @@ public final class AppSettings {
     public static let refreshIntervals: [TimeInterval] = [60, 120, 300, 600]
 
     enum Key {
-        static let hiddenProviders = "hiddenProviders"
+        static let disabledProviders = "disabledProviders"
         static let barMetric = "barMetric"
+        static let barIconStyle = "barIconStyle"
+        static let showPercentInBar = "showPercentInBar"
         static let showRemaining = "showRemaining"
         static let showCountdown = "showCountdown"
         static let colorAlerts = "colorAlerts"
@@ -19,13 +21,22 @@ public final class AppSettings {
 
     @ObservationIgnored private let defaults: UserDefaults
 
-    /// Providers the user removed from the menu bar.
-    public private(set) var hiddenProviders: Set<ProviderID> {
-        didSet { defaults.set(hiddenProviders.map(\.rawValue).sorted(), forKey: Key.hiddenProviders) }
+    /// Providers the user turned off: not refreshed, not shown.
+    public private(set) var disabledProviders: Set<ProviderID> {
+        didSet { defaults.set(disabledProviders.map(\.rawValue).sorted(), forKey: Key.disabledProviders) }
     }
 
     public var barMetric: BarMetric {
         didSet { defaults.set(barMetric.rawValue, forKey: Key.barMetric) }
+    }
+
+    public var barIconStyle: BarIconStyle {
+        didSet { defaults.set(barIconStyle.rawValue, forKey: Key.barIconStyle) }
+    }
+
+    /// Show the number next to the icon (off: icon only, the most compact).
+    public var showPercentInBar: Bool {
+        didSet { defaults.set(showPercentInBar, forKey: Key.showPercentInBar) }
     }
 
     /// Show the percentage left instead of the percentage used.
@@ -52,13 +63,17 @@ public final class AppSettings {
         self.defaults = defaults
         defaults.register(defaults: [
             Key.barMetric: BarMetric.mostCritical.rawValue,
+            Key.barIconStyle: BarIconStyle.meters.rawValue,
+            Key.showPercentInBar: true,
             Key.showRemaining: false,
             Key.showCountdown: false,
             Key.colorAlerts: true,
             Key.refreshInterval: 120.0,
         ])
-        hiddenProviders = Set((defaults.stringArray(forKey: Key.hiddenProviders) ?? []).compactMap(ProviderID.init(rawValue:)))
+        disabledProviders = Set((defaults.stringArray(forKey: Key.disabledProviders) ?? []).compactMap(ProviderID.init(rawValue:)))
         barMetric = BarMetric(rawValue: defaults.string(forKey: Key.barMetric) ?? "") ?? .mostCritical
+        barIconStyle = BarIconStyle(rawValue: defaults.string(forKey: Key.barIconStyle) ?? "") ?? .meters
+        showPercentInBar = defaults.bool(forKey: Key.showPercentInBar)
         showRemaining = defaults.bool(forKey: Key.showRemaining)
         showCountdown = defaults.bool(forKey: Key.showCountdown)
         colorAlerts = defaults.bool(forKey: Key.colorAlerts)
@@ -69,17 +84,21 @@ public final class AppSettings {
         BarPresenter.Config(metric: barMetric, showRemaining: showRemaining, showCountdown: showCountdown)
     }
 
-    public func isVisible(_ provider: ProviderID) -> Bool {
-        !hiddenProviders.contains(provider)
+    /// Enabled providers, in display order.
+    public var enabledProviders: [ProviderID] {
+        ProviderID.allCases.filter(isEnabled)
     }
 
-    /// Shows or hides a provider. The last visible one cannot be hidden:
-    /// without any menu bar item the app would be unreachable.
-    public func setVisible(_ provider: ProviderID, _ visible: Bool) {
-        if visible {
-            hiddenProviders.remove(provider)
-        } else if ProviderID.allCases.contains(where: { $0 != provider && isVisible($0) }) {
-            hiddenProviders.insert(provider)
+    public func isEnabled(_ provider: ProviderID) -> Bool {
+        !disabledProviders.contains(provider)
+    }
+
+    /// Turns a provider on or off. The last enabled one cannot be turned off.
+    public func setEnabled(_ provider: ProviderID, _ enabled: Bool) {
+        if enabled {
+            disabledProviders.remove(provider)
+        } else if ProviderID.allCases.contains(where: { $0 != provider && isEnabled($0) }) {
+            disabledProviders.insert(provider)
         }
     }
 }

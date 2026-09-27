@@ -10,6 +10,9 @@ public enum BrandPalette {
         case .claude: Color(red: 0.851, green: 0.467, blue: 0.341)  // #D97757, Claude's mark
         case .codex: Color(red: 0.353, green: 0.420, blue: 0.969)  // #5A6BF7, Codex's cloud
         case .antigravity: Color(red: 0.290, green: 0.604, blue: 0.965)  // #4A9AF6, Antigravity's arch
+        case .copilot: Color(red: 0.537, green: 0.341, blue: 0.898)  // #8957E5, Copilot purple
+        case .ollama: Color(red: 0.455, green: 0.498, blue: 0.557)  // #747F8E, Ollama's mark is monochrome
+        case .openrouter: Color(red: 0.392, green: 0.404, blue: 0.949)  // #6467F2, OpenRouter indigo
         }
     }
 
@@ -17,8 +20,9 @@ public enum BrandPalette {
     public static func logoFill(for provider: ProviderID) -> AnyShapeStyle {
         switch provider {
         case .claude: AnyShapeStyle(accent(for: .claude))
-        case .codex: AnyShapeStyle(.primary)  // OpenAI's mark is monochrome
         case .antigravity: AnyShapeStyle(antigravityGradient)
+        // OpenAI's, GitHub's, Ollama's and OpenRouter's marks are monochrome.
+        case .codex, .copilot, .ollama, .openrouter: AnyShapeStyle(.primary)
         }
     }
 

@@ -8,6 +8,7 @@ import os
 actor FakeProvider: UsageProvider {
     nonisolated let id: ProviderID
     private(set) var calls = 0
+    private(set) var reasons: [RefreshReason] = []
     private let delay: Duration
     private let usedPercent: Double
 
@@ -17,8 +18,9 @@ actor FakeProvider: UsageProvider {
         self.delay = delay
     }
 
-    func snapshot(previous: ProviderSnapshot?) async -> ProviderSnapshot {
+    func snapshot(previous: ProviderSnapshot?, reason: RefreshReason) async -> ProviderSnapshot {
         calls += 1
+        reasons.append(reason)
         if delay > .zero { try? await Task.sleep(for: delay) }
         var snapshot = previous ?? ProviderSnapshot(provider: id)
         snapshot.windows = [UsageWindow(id: "w", title: "Semanal", usedPercent: usedPercent, windowSeconds: 604_800)]
@@ -124,6 +126,49 @@ struct UsageStoreTests {
         store.stopAutoRefresh()
         #expect(await provider.calls == 1)
     }
+
+    @Test("O botão Atualizar pede uma leitura manual a todos")
+    func manualRefresh() async {
+        let claude = FakeProvider(.claude)
+        let codex = FakeProvider(.codex, delay: .milliseconds(30))
+        let store = UsageStore(providers: [claude, codex])
+        store.refreshAll(reason: .manual)
+        #expect(store.isRefreshing)
+        await store.refreshAllAndWait()  // joins the manual refreshes already running
+        #expect(!store.isRefreshing)
+        #expect(await claude.reasons == [.manual])
+        #expect(await codex.reasons == [.manual])
+    }
+
+    @Test("Provedores desligados não são consultados nem listados")
+    func disabledProviders() async {
+        let claude = FakeProvider(.claude)
+        let codex = FakeProvider(.codex)
+        let store = UsageStore(providers: [claude, codex], enabledProviders: [.claude])
+        #expect(store.providerIDs == [.claude])
+        await store.refreshAllAndWait()
+        store.requestRefresh(.codex)
+        #expect(store.refreshing.isEmpty)
+        #expect(await codex.calls == 0)
+
+        store.enabledProviders.insert(.codex)
+        #expect(store.providerIDs == [.claude, .codex])
+        await store.refresh(.codex)
+        #expect(await codex.calls == 1)
+    }
+
+    @Test("Ao abrir o painel, só relê quem está velho")
+    func refreshStale() async {
+        let claude = FakeProvider(.claude)
+        let codex = FakeProvider(.codex)
+        let store = UsageStore(providers: [claude, codex])
+        await store.refresh(.claude)
+        store.refreshStale(olderThan: 30)
+        #expect(store.refreshing == [.codex])
+        await store.refresh(.codex)
+        #expect(await claude.calls == 1)
+        #expect(await codex.calls == 1)
+    }
 }
 
 @Suite("Persistência e preferências")
@@ -177,7 +222,7 @@ struct PersistenceTests {
         #expect(snapshot.status == .notInstalled)
     }
 
-    @Test("Preferências persistem e o último item não some")
+    @Test("Preferências persistem e o último provedor não pode ser desligado")
     @MainActor
     func settings() throws {
         let suite = "AERESBarTests-\(UUID().uuidString)"
@@ -186,26 +231,49 @@ struct PersistenceTests {
 
         let settings = AppSettings(defaults: defaults)
         #expect(settings.barMetric == .mostCritical)
+        #expect(settings.barIconStyle == .meters)
+        #expect(settings.showPercentInBar)
         #expect(settings.colorAlerts)
         #expect(settings.refreshInterval == 120)
-        #expect(ProviderID.allCases.allSatisfy(settings.isVisible))
+        #expect(settings.enabledProviders == ProviderID.allCases)
 
         settings.barMetric = .weekly
+        settings.barIconStyle = .criticalLogo
+        settings.showPercentInBar = false
         settings.showRemaining = true
         settings.refreshInterval = 300
-        settings.setVisible(.codex, false)
-        settings.setVisible(.antigravity, false)
-        settings.setVisible(.claude, false)  // refused: it is the last one
-        #expect(settings.isVisible(.claude))
+        for provider in ProviderID.allCases { settings.setEnabled(provider, false) }
+        #expect(settings.enabledProviders == [.openrouter])  // the last one stays on
 
         let reloaded = AppSettings(defaults: defaults)
         #expect(reloaded.barMetric == .weekly)
+        #expect(reloaded.barIconStyle == .criticalLogo)
+        #expect(!reloaded.showPercentInBar)
         #expect(reloaded.showRemaining)
         #expect(reloaded.refreshInterval == 300)
-        #expect(reloaded.hiddenProviders == [.codex, .antigravity])
+        #expect(reloaded.disabledProviders == Set(ProviderID.allCases).subtracting([.openrouter]))
         #expect(reloaded.barConfig == BarPresenter.Config(metric: .weekly, showRemaining: true, showCountdown: false))
 
-        reloaded.setVisible(.codex, true)
-        #expect(reloaded.isVisible(.codex))
+        reloaded.setEnabled(.codex, true)
+        #expect(reloaded.isEnabled(.codex))
+        #expect(reloaded.enabledProviders == [.codex, .openrouter])
+    }
+
+    @Test("Valores inválidos gravados voltam ao padrão")
+    @MainActor
+    func invalidStoredValues() throws {
+        let suite = "AERESBarTests-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        defaults.set("bogus", forKey: "barMetric")
+        defaults.set("bogus", forKey: "barIconStyle")
+        defaults.set(5.0, forKey: "refreshInterval")
+        defaults.set(["codex", "gone"], forKey: "disabledProviders")
+
+        let settings = AppSettings(defaults: defaults)
+        #expect(settings.barMetric == .mostCritical)
+        #expect(settings.barIconStyle == .meters)
+        #expect(settings.refreshInterval == 30)
+        #expect(settings.disabledProviders == [.codex])
     }
 }

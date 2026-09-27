@@ -8,19 +8,23 @@ import Testing
 @Suite("Parser de caminhos SVG")
 struct SVGPathTests {
     @Test(
-        "As três marcas oficiais são lidas e cabem na sua viewBox",
+        "As seis marcas oficiais são lidas e cabem na sua viewBox",
         arguments: [
             (ProviderID.claude, CGRect(x: 0, y: 0, width: 24, height: 24)),
             (.codex, CGRect(x: 0, y: 0, width: 24, height: 24)),
             (.antigravity, CGRect(x: 0, y: 0, width: 112, height: 112)),
+            (.copilot, CGRect(x: 0, y: 0, width: 24, height: 24)),
+            (.ollama, CGRect(x: 0, y: 0, width: 24, height: 24)),
+            (.openrouter, CGRect(x: 0, y: 0, width: 24, height: 24)),
         ])
     func officialMarks(provider: ProviderID, viewBox: CGRect) throws {
-        let path = try SVGPath.parse(BrandMark.pathData(for: provider))
-        let bounds = path.boundingBoxOfPath
+        let parts = try BrandMark.pathData(for: provider).map(SVGPath.parse)
+        #expect(!parts.isEmpty)
+        let bounds = parts.map(\.boundingBoxOfPath).reduce(CGRect.null) { $0.union($1) }
         #expect(!bounds.isEmpty)
         #expect(viewBox.insetBy(dx: -0.5, dy: -0.5).contains(bounds))
         // The mark fills a good part of its canvas.
-        #expect(bounds.width > viewBox.width * 0.6)
+        #expect(max(bounds.width, bounds.height) > viewBox.width * 0.6)
         #expect(!BrandMark.path(for: provider).isEmpty)
     }
 
@@ -110,23 +114,56 @@ struct BrandImageTests {
     }
 }
 
-/// Serves a fixed snapshot.
-actor StaticProvider: UsageProvider {
-    nonisolated let id: ProviderID
-    let snapshot: ProviderSnapshot
-
-    init(_ snapshot: ProviderSnapshot) {
-        id = snapshot.provider
-        self.snapshot = snapshot
+@Suite("Medidor da barra de menus")
+@MainActor
+struct MeterImageTests {
+    /// Alpha at a point given in image points from the bottom-left, on a 2× rendering.
+    private func alpha(_ rep: NSBitmapImageRep, x: CGFloat, y: CGFloat) -> CGFloat {
+        let column = Int(x * 2)
+        let row = rep.pixelsHigh - 1 - Int(y * 2)  // bitmap rows run top to bottom
+        return rep.colorAt(x: column, y: row)?.alphaComponent ?? 0
     }
 
-    func snapshot(previous: ProviderSnapshot?) async -> ProviderSnapshot { snapshot }
+    @Test("Imagem modelo com 1×, 2× e 3×, reaproveitada para os mesmos níveis")
+    func template() {
+        let image = MeterImage.template(levels: [74, 86, nil])
+        #expect(image.isTemplate)
+        #expect(image.size == NSSize(width: 16, height: 16))
+        #expect(image.representations.count == 3)
+        #expect(MeterImage.template(levels: [74.2, 85.9, nil]) === image)  // same rounded levels
+        #expect(MeterImage.template(levels: [74, 87, nil]) !== image)
+    }
+
+    @Test("Cada barra enche até o uso; sem dados, fica só o trilho")
+    func fillLevels() throws {
+        let rep = try #require(MeterImage.render(levels: [100, nil, 50], pointSize: 16, scale: 2))
+        #expect(rep.pixelsWide == 32 && rep.pixelsHigh == 32)
+        // Three 3.67 pt bars 1.5 pt apart, centred: their middles sit at x = 2.8, 8 and 13.2 pt,
+        // from y = 1.5 to 14.5 pt.
+        let (full, empty, half) = (CGFloat(2.8), CGFloat(8), CGFloat(13.2))
+        #expect(alpha(rep, x: full, y: 13.5) > 0.9)
+        #expect(alpha(rep, x: full, y: 2.5) > 0.9)
+        #expect(abs(alpha(rep, x: empty, y: 13.5) - 0.32) < 0.05)
+        #expect(abs(alpha(rep, x: empty, y: 2.5) - 0.32) < 0.05)
+        #expect(alpha(rep, x: half, y: 2.5) > 0.9)
+        #expect(abs(alpha(rep, x: half, y: 13.5) - 0.32) < 0.05)
+        // Nothing is drawn between the bars.
+        #expect(alpha(rep, x: 5.4, y: 8) < 0.05)
+    }
+
+    @Test("Sem provedores, desenha três trilhos vazios; muitos provedores cabem no quadro")
+    func placeholders() throws {
+        let empty = try #require(MeterImage.render(levels: [], pointSize: 16, scale: 2))
+        #expect(abs(alpha(empty, x: 8, y: 8) - 0.32) < 0.05)
+        let six = try #require(MeterImage.render(levels: [10, 20, 30, 40, 50, 60], pointSize: 16, scale: 2))
+        #expect(alpha(six, x: 0.2, y: 8) < 0.05 && alpha(six, x: 15.8, y: 8) < 0.05)
+    }
 }
 
 @Suite("Renderização do painel")
 @MainActor
 struct PanelRenderingTests {
-    @Test("Gera as imagens do painel e da barra para todos os provedores")
+    @Test("Gera as imagens do painel (resumido e aberto) e da barra, no claro e no escuro")
     func renderPreviews() async throws {
         let now = Date()
         let claude = ProviderSnapshot(
@@ -154,30 +191,63 @@ struct PanelRenderingTests {
             message: "O Antigravity está fechado — abra-o para atualizar as cotas.",
             models: [ModelQuota(label: "Gemini", remainingFraction: 0.5, resetsAt: nil)]
         )
-        let store = UsageStore(providers: [StaticProvider(claude), StaticProvider(antigravity)])
+        let openRouter = ProviderSnapshot(provider: .openrouter, status: .notInstalled, message: "Defina a chave.")
+        let store = UsageStore(providers: [StaticProvider(claude), StaticProvider(antigravity), StaticProvider(openRouter)])
         await store.refreshAllAndWait()
 
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("AERESBarUITests-\(UUID().uuidString)")
         defer { try? FileManager.default.removeItem(at: folder) }
-        let suite = "AERESBarUITests-\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suite))
-        defer { defaults.removePersistentDomain(forName: suite) }
+        let temporary = try TemporarySettings()
+        defer { temporary.remove() }
 
-        let files = try PreviewRenderer.render(store: store, settings: AppSettings(defaults: defaults), into: folder)
-        #expect(files.count == 8)
+        let files = try PreviewRenderer.render(store: store, settings: temporary.settings, into: folder)
+        #expect(
+            files.map(\.lastPathComponent) == [
+                "panel-dark.png", "panel-expanded-dark.png", "menubar-dark.png",
+                "panel-light.png", "panel-expanded-light.png", "menubar-light.png",
+            ])
         for file in files {
             let image = try #require(NSImage(contentsOf: file))
             #expect(image.size.width > 0)
         }
-        let panel = try #require(NSImage(contentsOf: folder.appendingPathComponent("panel-claude-dark.png")))
+        let panel = try #require(NSImage(contentsOf: folder.appendingPathComponent("panel-dark.png")))
+        let expanded = try #require(NSImage(contentsOf: folder.appendingPathComponent("panel-expanded-dark.png")))
         #expect(panel.representations.first?.pixelsWide == Int(PanelRootView.width * 2))
+        // Opening a provider shows its details below the summary.
+        #expect((expanded.representations.first?.pixelsHigh ?? 0) > (panel.representations.first?.pixelsHigh ?? 0))
+
+        // The logo style draws the most critical provider's mark instead of the meters.
+        temporary.settings.barIconStyle = .criticalLogo
+        temporary.settings.showPercentInBar = false
+        #expect(try PreviewRenderer.render(store: store, settings: temporary.settings, into: folder).count == 6)
+    }
+
+    @Test("Sem nenhum provedor presente, o painel diz isso")
+    func emptyPanel() async throws {
+        let store = UsageStore(providers: [StaticProvider(ProviderSnapshot(provider: .claude, status: .notInstalled))])
+        await store.refreshAllAndWait()
+        let temporary = try TemporarySettings()
+        defer { temporary.remove() }
+        let view = PanelRootView(store: store, settings: temporary.settings, state: PanelState(), actions: PanelActions())
+        let renderer = ImageRenderer(content: view)
+        #expect((renderer.nsImage?.size.height ?? 0) > 0)
+    }
+
+    @Test("Abrir e fechar um provedor")
+    func toggleSections() {
+        let state = PanelState()
+        state.toggle(.codex)
+        state.toggle(.claude)
+        #expect(state.expanded == [.codex, .claude])
+        state.toggle(.codex)
+        #expect(state.expanded == [.claude])
     }
 }
 
 @Suite("Dados de exemplo")
 @MainActor
 struct DemoDataTests {
-    @Test("Cobrem os três provedores e os estados de alerta")
+    @Test("Cobrem os seis provedores e os estados de alerta")
     func demoStore() async {
         let store = DemoData.store()
         await store.refreshAllAndWait()
@@ -188,5 +258,8 @@ struct DemoDataTests {
         }
         let alerts = ProviderID.allCases.compactMap { BarPresenter.value(for: store.snapshots[$0], config: .init(), now: Date()).alert }
         #expect(alerts == [.warning, .critical])
+        let overall = BarPresenter.overall(for: store.snapshots, providers: store.providerIDs, config: .init(), now: Date())
+        #expect(overall.critical == .antigravity)
+        #expect(overall.levels.count == 6)
     }
 }

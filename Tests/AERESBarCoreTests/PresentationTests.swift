@@ -145,6 +145,41 @@ struct UsagePresentationTests {
         #expect(UsagePresentation.tokenColumns(for: TokenSummary()).map(\.title) == ["Hoje", "7 dias"])
     }
 
+    @Test("Textos compactos das linhas do resumo")
+    func compactTexts() throws {
+        let now = try #require(iso("2026-09-27T03:30:00Z"))
+        var window = UsageWindow(
+            id: "s", title: "Sessão", usedPercent: 10, resetsAt: now.addingTimeInterval(4 * 3_600 + 51 * 60), windowSeconds: 18_000)
+        #expect(UsagePresentation.compactReset(for: window, now: now) == "4h51")
+        window.resetsAt = now.addingTimeInterval(-60)
+        #expect(UsagePresentation.compactReset(for: window, now: now) == "renovou")
+        window.resetsAt = nil
+        #expect(UsagePresentation.compactReset(for: window, now: now) == "")
+        window.notStarted = true
+        #expect(UsagePresentation.compactReset(for: window, now: now) == "—")
+
+        let summary = TokenSummary(
+            session: TokenCounts(input: 1_500), today: TokenCounts(input: 118_000_000), week: TokenCounts(input: 3_600_000_000),
+            weekIsRolling: false)
+        #expect(UsagePresentation.tokenLine(for: summary) == "Tokens: sessão 1,5K · hoje 118M · semana 3,6B")
+        #expect(UsagePresentation.tokenLine(for: TokenSummary(today: TokenCounts(input: 10))) == "Tokens: hoje 10 · 7 dias 0")
+        #expect(UsagePresentation.tokenLine(for: TokenSummary()) == nil)
+    }
+
+    @Test("Cabeçalho e rodapé do painel")
+    func headerAndFooter() throws {
+        let now = try #require(iso("2026-09-27T03:30:00Z"))
+        #expect(UsagePresentation.updatedLine(for: [], now: now) == "Ainda não atualizado")
+        let snapshots = [
+            ProviderSnapshot(provider: .claude, checkedAt: now.addingTimeInterval(-300)),
+            ProviderSnapshot(provider: .codex, checkedAt: now.addingTimeInterval(-12)),
+            ProviderSnapshot(provider: .copilot),
+        ]
+        #expect(UsagePresentation.updatedLine(for: snapshots, now: now) == "Atualizado há 12 s")
+        #expect(UsagePresentation.unconfiguredLine(for: []) == nil)
+        #expect(UsagePresentation.unconfiguredLine(for: [.ollama, .openrouter]) == "Não configurados: Ollama, OpenRouter")
+    }
+
     @Test("Cota restante por modelo")
     func modelRemaining() {
         let now = Date(timeIntervalSince1970: 1_000)
@@ -170,6 +205,8 @@ struct CLICommandTests {
             (["--render-preview", "out"], .renderPreview(directory: "out", demo: false)),
             (["--render-preview", "docs/images", "--demo"], .renderPreview(directory: "docs/images", demo: true)),
             (["--login-item", "off"], .loginItem(.off)),
+            (["--set-key", "openrouter"], .setKey(.openRouter)),
+            (["--delete-key", "ollama"], .deleteKey(.ollama)),
             (["--version"], .version),
             (["-h"], .help),
         ]
@@ -192,10 +229,124 @@ struct CLICommandTests {
             Issue.record("esperava erro para ação inválida")
             return
         }
+        guard case .invalid(let reason) = CLICommand.parse(["AERESBar", "--set-key", "anthropic"]) else {
+            Issue.record("esperava erro para conta de chave desconhecida")
+            return
+        }
+        #expect(reason == "--set-key aceita openrouter ou ollama")
+        guard case .invalid = CLICommand.parse(["AERESBar", "--delete-key"]) else {
+            Issue.record("esperava erro para conta ausente")
+            return
+        }
         guard case .invalid = CLICommand.parse(["AERESBar", "--bogus"]) else {
             Issue.record("esperava erro para opção desconhecida")
             return
         }
         #expect(CLICommand.usage.contains("--dump"))
+        #expect(CLICommand.usage.contains("--set-key openrouter|ollama"))
+    }
+}
+
+@Suite("Item único da barra de menus")
+struct OverallBarTests {
+    let now = Date(timeIntervalSince1970: 1_790_000_000)
+
+    /// A provider with one window per value; window `n` renews in `n + 1` hours.
+    private func snapshot(_ provider: ProviderID, _ used: [Double], tokensToday: Int? = nil) -> ProviderSnapshot {
+        ProviderSnapshot(
+            provider: provider,
+            status: .ok,
+            windows: used.enumerated().map { index, value in
+                UsageWindow(
+                    id: "\(provider.rawValue).\(index)", title: "Janela \(index)", usedPercent: value,
+                    resetsAt: now.addingTimeInterval(3_600 * Double(index + 1)), windowSeconds: 18_000)
+            },
+            tokens: tokensToday.map { TokenSummary(today: TokenCounts(input: $0)) }
+        )
+    }
+
+    @Test("O número vem do provedor mais perto do limite; o medidor mostra todos")
+    func mostCritical() {
+        let snapshots = [
+            ProviderID.claude: snapshot(.claude, [38, 74]),
+            .codex: snapshot(.codex, [86, 41]),
+            .copilot: snapshot(.copilot, [12]),
+        ]
+        let overall = BarPresenter.overall(for: snapshots, providers: [.claude, .codex, .copilot], config: .init(), now: now)
+        #expect(overall.text == "86%")
+        #expect(overall.critical == .codex)
+        #expect(overall.usedPercent == 86)
+        #expect(overall.alert == .warning)
+        #expect(overall.hasData)
+        #expect(
+            overall.levels == [
+                OverallBarValue.Level(provider: .claude, usedPercent: 74),
+                OverallBarValue.Level(provider: .codex, usedPercent: 86),
+                OverallBarValue.Level(provider: .copilot, usedPercent: 12),
+            ])
+    }
+
+    @Test("Ferramentas ausentes ou sem limites ficam fora do medidor; as que carregam aparecem vazias")
+    func excluded() {
+        let snapshots = [
+            ProviderID.claude: snapshot(.claude, [20]),
+            .antigravity: ProviderSnapshot(provider: .antigravity, status: .notInstalled),
+            .ollama: ProviderSnapshot(provider: .ollama, status: .ok),  // local models only: no limits
+            .openrouter: ProviderSnapshot(provider: .openrouter),  // still loading
+        ]
+        let overall = BarPresenter.overall(
+            for: snapshots, providers: [.claude, .antigravity, .ollama, .openrouter], config: .init(), now: now)
+        #expect(overall.levels.map(\.provider) == [.claude, .openrouter])
+        #expect(overall.levels.last?.usedPercent == nil)
+        #expect(overall.text == "20%")
+        #expect(overall.alert == nil)
+        #expect(BarPresenter.accessibilityLabel(for: overall) == "AERES Bar: Claude 20%, OpenRouter sem dados")
+    }
+
+    @Test("Sem dados: reticências enquanto carrega, traço depois")
+    func noData() {
+        let loading = BarPresenter.overall(for: [:], providers: [.claude], config: .init(), now: now)
+        #expect(loading.text == "…")
+        #expect(!loading.hasData)
+        #expect(loading.levels.isEmpty)
+
+        let failed = BarPresenter.overall(
+            for: [.claude: ProviderSnapshot(provider: .claude, status: .error)], providers: [.claude], config: .init(), now: now)
+        #expect(failed.text == "–")
+        #expect(failed.critical == nil)
+        #expect(BarPresenter.accessibilityLabel(for: failed) == "AERES Bar: sem dados")
+    }
+
+    @Test("Tokens de hoje somam todos os provedores; o alerta continua vindo dos limites")
+    func tokensToday() {
+        let snapshots = [
+            ProviderID.claude: snapshot(.claude, [50], tokensToday: 1_200_000),
+            .codex: snapshot(.codex, [97], tokensToday: 300_000),
+        ]
+        let overall = BarPresenter.overall(for: snapshots, providers: [.claude, .codex], config: .init(metric: .tokensToday), now: now)
+        #expect(overall.text == "1,5M")
+        #expect(overall.critical == .codex)
+        #expect(overall.alert == .critical)
+        #expect(overall.hasData)
+
+        // Nobody logs tokens: fall back to the most critical limit.
+        let limitsOnly = BarPresenter.overall(
+            for: [.copilot: snapshot(.copilot, [45])], providers: [.copilot], config: .init(metric: .tokensToday, showRemaining: true),
+            now: now)
+        #expect(limitsOnly.text == "55%")
+    }
+
+    @Test("% restante e tempo até renovar seguem as preferências")
+    func preferences() {
+        let overall = BarPresenter.overall(
+            for: [.claude: snapshot(.claude, [30, 80])], providers: [.claude], config: .init(showRemaining: true, showCountdown: true),
+            now: now)
+        #expect(overall.text == "20% · 2h00")
+    }
+
+    @Test("Estilos de ícone")
+    func iconStyles() {
+        #expect(BarIconStyle.allCases == [.meters, .criticalLogo])
+        #expect(BarIconStyle.allCases.allSatisfy { !$0.title.isEmpty })
     }
 }

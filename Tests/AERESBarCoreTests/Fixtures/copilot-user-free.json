@@ -1,0 +1,51 @@
+{
+  "access_type_sku": "free_limited_copilot",
+  "copilot_plan": "individual",
+  "chat_enabled": true,
+  "quota_reset_date": "2026-10-01",
+  "quota_reset_date_utc": "2026-10-01T00:00:00.000Z",
+  "quota_snapshots": {
+    "chat": {
+      "overage_count": 0,
+      "overage_permitted": false,
+      "percent_remaining": 18.5,
+      "quota_id": "chat",
+      "quota_remaining": 37.0,
+      "unlimited": false,
+      "timestamp_utc": "2026-09-27T14:55:48.712Z",
+      "has_quota": true,
+      "quota_reset_at": 0,
+      "credits_used": 0,
+      "remaining": 37,
+      "entitlement": 200
+    },
+    "completions": {
+      "overage_count": 0,
+      "overage_permitted": false,
+      "percent_remaining": 72.5,
+      "quota_id": "completions",
+      "quota_remaining": 1450.0,
+      "unlimited": false,
+      "timestamp_utc": "2026-09-27T14:55:48.712Z",
+      "has_quota": true,
+      "quota_reset_at": 0,
+      "credits_used": 0,
+      "remaining": 1450,
+      "entitlement": 2000
+    },
+    "premium_interactions": {
+      "overage_count": 0,
+      "overage_permitted": false,
+      "percent_remaining": 0.0,
+      "quota_id": "premium_interactions",
+      "quota_remaining": 0.0,
+      "unlimited": false,
+      "timestamp_utc": "2026-09-27T14:55:48.712Z",
+      "has_quota": false,
+      "quota_reset_at": 0,
+      "credits_used": 0,
+      "remaining": 0,
+      "entitlement": 0
+    }
+  }
+}

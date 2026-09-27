@@ -1,0 +1,19 @@
+{
+  "limits": {
+    "session": {
+      "usage": 0.225,
+      "models": {
+        "gpt-oss:120b": { "request_count": 30 },
+        "qwen3-coder:480b": { "request_count": 18 }
+      }
+    },
+    "weekly": {
+      "usage": 0.58,
+      "models": {
+        "gpt-oss:120b": { "request_count": 1200 },
+        "qwen3-coder:480b": { "request_count": 310 }
+      }
+    }
+  },
+  "activity": {}
+}

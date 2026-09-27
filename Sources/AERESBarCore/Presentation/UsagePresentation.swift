@@ -101,6 +101,37 @@ public enum UsagePresentation {
         return "\(Formatting.percent(fraction * 100)) livre"
     }
 
+    /// Time left in a compact form for one-line rows: "4h51", "3d12h", "—" when the clock has not
+    /// started, "" when the provider does not say.
+    public static func compactReset(for window: UsageWindow, now: Date) -> String {
+        if window.notStarted { return "—" }
+        guard let reset = window.resetsAt else { return "" }
+        if reset <= now { return "renovou" }
+        return Formatting.compactCountdown(reset.timeIntervalSince(now))
+    }
+
+    /// "Tokens: hoje 118M · semana 3,6B".
+    public static func tokenLine(for summary: TokenSummary) -> String? {
+        guard !summary.isEmpty else { return nil }
+        var parts: [String] = []
+        if let session = summary.session, session.total > 0 { parts.append("sessão \(Formatting.tokens(session.total))") }
+        parts.append("hoje \(Formatting.tokens(summary.today.total))")
+        parts.append("\(summary.weekIsRolling ? "7 dias" : "semana") \(Formatting.tokens(summary.week.total))")
+        return "Tokens: " + parts.joined(separator: " · ")
+    }
+
+    /// When the most recent refresh happened, for the panel header.
+    public static func updatedLine(for snapshots: [ProviderSnapshot], now: Date) -> String {
+        guard let latest = snapshots.compactMap(\.checkedAt).max() else { return "Ainda não atualizado" }
+        return "Atualizado \(Formatting.relative(latest, now: now))"
+    }
+
+    /// "Não configurados: Ollama, OpenRouter".
+    public static func unconfiguredLine(for providers: [ProviderID]) -> String? {
+        guard !providers.isEmpty else { return nil }
+        return "Não configurados: " + providers.map(\.displayName).joined(separator: ", ")
+    }
+
     /// VoiceOver description of a window row.
     public static func accessibilityLabel(for window: UsageWindow, now: Date) -> String {
         "\(window.title): \(Formatting.percent(window.effectiveUsed(at: now))) usado. \(resetDescription(for: window, now: now))"

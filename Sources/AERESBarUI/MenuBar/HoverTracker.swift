@@ -1,14 +1,11 @@
-import AERESBarCore
 import AppKit
 
-/// Receives mouse enter/exit events for a menu bar button (tracking-area owner).
+/// Receives mouse enter/exit events for the menu bar button (tracking-area owner).
 @MainActor
 final class HoverTracker: NSResponder {
-    private let provider: ProviderID
-    private let handler: (ProviderID, Bool) -> Void
+    private let handler: (Bool) -> Void
 
-    init(provider: ProviderID, handler: @escaping (ProviderID, Bool) -> Void) {
-        self.provider = provider
+    init(handler: @escaping (Bool) -> Void) {
         self.handler = handler
         super.init()
     }
@@ -19,10 +16,10 @@ final class HoverTracker: NSResponder {
     }
 
     override func mouseEntered(with event: NSEvent) {
-        handler(provider, true)
+        handler(true)
     }
 
     override func mouseExited(with event: NSEvent) {
-        handler(provider, false)
+        handler(false)
     }
 }

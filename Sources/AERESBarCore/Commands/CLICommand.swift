@@ -12,6 +12,10 @@ public enum CLICommand: Equatable, Sendable {
     case renderPreview(directory: String, demo: Bool)
     /// Enable, disable or report "open at login".
     case loginItem(LoginItemAction)
+    /// Store an API key read from standard input.
+    case setKey(SecretAccount)
+    /// Remove a stored API key.
+    case deleteKey(SecretAccount)
     case version
     case help
     /// Unrecognised input, with the reason.
@@ -32,6 +36,12 @@ public enum CLICommand: Equatable, Sendable {
                 return .invalid("--login-item aceita on, off ou status")
             }
             return .loginItem(action)
+        case "--set-key", "--delete-key":
+            guard args.count >= 2, let account = SecretAccount(rawValue: args[1]) else {
+                let names = SecretAccount.allCases.map(\.rawValue).joined(separator: " ou ")
+                return .invalid("\(first) aceita \(names)")
+            }
+            return first == "--set-key" ? .setKey(account) : .deleteKey(account)
         case "--version", "-v":
             return .version
         case "--help", "-h":
@@ -41,18 +51,26 @@ public enum CLICommand: Equatable, Sendable {
         }
     }
 
-    public static let usage = """
-        Uso: AERESBar [opção]
+    public static let usage: String = {
+        let accounts = SecretAccount.allCases.map(\.rawValue).joined(separator: "|")
+        return """
+            Uso: AERESBar [opção]
 
-        Sem opções, abre o AERES Bar na barra de menus.
+            Sem opções, abre o AERES Bar na barra de menus.
 
-          --dump                   imprime em JSON tudo o que o app lê e sai
-          --render-preview <dir> [--demo]
-                                   salva imagens do painel e da barra em <dir>
-                                   (--demo usa dados de exemplo em vez dos seus)
-          --login-item on|off|status
-                                   liga, desliga ou mostra a abertura no login
-          --version                mostra a versão
-          --help                   mostra esta ajuda
-        """
+              --dump                   imprime em JSON tudo o que o app lê e sai
+              --render-preview <dir> [--demo]
+                                       salva imagens do painel e da barra em <dir>
+                                       (--demo usa dados de exemplo em vez dos seus)
+              --login-item on|off|status
+                                       liga, desliga ou mostra a abertura no login
+              --set-key \(accounts)
+                                       guarda no Chaves a chave digitada (sem eco)
+                                       ou recebida pela entrada padrão
+              --delete-key \(accounts)
+                                       apaga a chave guardada
+              --version                mostra a versão
+              --help                   mostra esta ajuda
+            """
+    }()
 }

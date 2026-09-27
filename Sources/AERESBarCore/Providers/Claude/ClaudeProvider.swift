@@ -17,8 +17,7 @@ public actor ClaudeProvider: UsageProvider {
     private let now: @Sendable () -> Date
     private let policy: FetchPolicy
     private var credentials: ClaudeCredentials?
-    private var retryAfter: Date?
-    private var lastFetch: (result: ClaudeUsageParser.Result, at: Date)?
+    private var state = FetchState<ClaudeUsageParser.Result>()
 
     public init(
         http: any HTTPClient = URLSessionHTTPClient.standard,
@@ -36,15 +35,15 @@ public actor ClaudeProvider: UsageProvider {
         self.now = now
     }
 
-    public func snapshot(previous: ProviderSnapshot?) async -> ProviderSnapshot {
+    public func snapshot(previous: ProviderSnapshot?, reason: RefreshReason) async -> ProviderSnapshot {
         let now = now()
         var snapshot = previous ?? ProviderSnapshot(provider: .claude)
         snapshot.checkedAt = now
 
-        switch await limits(now: now) {
+        switch await limits(now: now, reason: reason) {
         case .success(let fetch):
-            snapshot.windows = fetch.result.windows
-            snapshot.details = fetch.result.details
+            snapshot.windows = fetch.value.windows
+            snapshot.details = fetch.value.details
             snapshot.markFresh(at: fetch.at, source: "API da Anthropic + logs locais")
         case .failure(let issue):
             // Without a login but with transcripts, tokens are still worth showing.
@@ -68,19 +67,17 @@ public actor ClaudeProvider: UsageProvider {
         return snapshot
     }
 
-    /// The last response while it is recent, otherwise a new request.
-    private func limits(now: Date) async -> Result<(result: ClaudeUsageParser.Result, at: Date), ProviderIssue> {
-        if let lastFetch, now.timeIntervalSince(lastFetch.at) < policy.minimumInterval {
-            return .success(lastFetch)
-        }
+    /// The last response while the policy allows reusing it, otherwise a new request.
+    private func limits(now: Date, reason: RefreshReason) async -> Result<(value: ClaudeUsageParser.Result, at: Date), ProviderIssue> {
+        if let cached = state.reusable(now: now, reason: reason, policy: policy) { return .success(cached) }
         let outcome = await fetchLimits(now: now)
-        if case .success(let result) = outcome { lastFetch = (result, now) }
+        if case .success(let result) = outcome { state.record(result, at: now) }
         return outcome.map { ($0, now) }
     }
 
     private func fetchLimits(now: Date) async -> Result<ClaudeUsageParser.Result, ProviderIssue> {
-        if let retryAfter, retryAfter > now {
-            return .failure(ProviderIssue(.rateLimited, "Muitas consultas seguidas à Anthropic — nova tentativa em alguns minutos."))
+        if state.isBackingOff(at: now) {
+            return .failure(ProviderIssue(.rateLimited, "A Anthropic pediu uma pausa nas consultas — nova tentativa em alguns minutos."))
         }
         // Claude Code rotates its token; re-read it whenever ours is missing or expired.
         if credentials?.isExpired(at: now) ?? true {
@@ -125,7 +122,7 @@ public actor ClaudeProvider: UsageProvider {
                 ProviderIssue(.unauthorized, "A Anthropic recusou a credencial do Claude Code. Use o Claude Code para renová-la."))
         case 429:
             let until = policy.backoffDeadline(from: response, now: now)
-            retryAfter = until
+            state.retryAfter = until
             Log.providers.notice("Claude: HTTP 429, Retry-After=\(response.headers["retry-after"] ?? "-", privacy: .public)")
             return .failure(
                 ProviderIssue(
