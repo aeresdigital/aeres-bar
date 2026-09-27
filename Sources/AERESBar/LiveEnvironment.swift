@@ -13,7 +13,7 @@ enum LiveEnvironment {
                 AntigravityProvider(),
                 CopilotProvider(),
                 OllamaProvider(secrets: secrets),
-                OpenRouterProvider(secrets: secrets),
+                KeyedUsageProvider(service: .openRouter, secrets: secrets),
             ],
             persistence: persistent ? FileSnapshotStore() : nil,
             enabledProviders: enabled

@@ -588,9 +588,9 @@ struct OpenRouterProviderTests {
     private func provider(
         _ http: MockHTTPClient, secrets: MemorySecretStore = MemorySecretStore([.openRouter: "sk-or-v1-test"])
     )
-        -> OpenRouterProvider
+        -> KeyedUsageProvider
     {
-        OpenRouterProvider(http: http, secrets: secrets, now: clock.provider)
+        KeyedUsageProvider(service: .openRouter, http: http, secrets: secrets, now: clock.provider)
     }
 
     @Test("Lê a chave e o saldo, com os cabeçalhos certos")
