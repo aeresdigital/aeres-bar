@@ -125,6 +125,7 @@ public actor CodexProvider: UsageProvider {
         case 429:
             let until = policy.backoffDeadline(from: response, now: now)
             retryAfter = until
+            Log.providers.notice("Codex: HTTP 429, Retry-After=\(response.headers["retry-after"] ?? "-", privacy: .public)")
             return .failure(
                 ProviderIssue(
                     .rateLimited,

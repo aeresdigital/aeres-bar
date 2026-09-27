@@ -62,7 +62,7 @@ Renovar um token OAuth rotaciona o *refresh token*. Se o AERES Bar renovasse por
 
 ### Política de consultas (`FetchPolicy`)
 
-- Uma resposta com menos de 60 s é reaproveitada. Passar o mouse sobre a barra (que pede atualização se a leitura tiver mais de 30 s) não vira uma chamada de API.
+- Uma resposta recente é reaproveitada: 3 min na Anthropic, que responde 429 depois de poucas chamadas em alguns minutos, e 1 min no ChatGPT. Passar o mouse sobre a barra (que pede atualização se a leitura tiver mais de 30 s) não vira uma chamada de API.
 - HTTP 429: o provedor pausa até o `Retry-After` (segundos ou data HTTP), limitado entre 30 s e 30 min, ou por 5 min se o cabeçalho não vier.
 
 ### Antigravity

@@ -38,14 +38,35 @@ struct ClaudeProviderTests {
     func reusesRecentResponse() async throws {
         let http = MockHTTPClient(status: 200, body: try Fixture.data("claude-usage.json"))
         let provider = ClaudeProvider(
-            http: http, credentialSource: StubCredentialSource(credentials()), logRoots: noLogs, now: clock.provider)
+            http: http,
+            credentialSource: StubCredentialSource(credentials()),
+            logRoots: noLogs,
+            policy: FetchPolicy(minimumInterval: 60),
+            now: clock.provider
+        )
         _ = await provider.snapshot(previous: nil)
         clock.advance(by: 30)
         let second = await provider.snapshot(previous: nil)
         #expect(http.requests.count == 1)
         #expect(second.status == .ok)
+        #expect(second.limitsUpdatedAt == clock.now.addingTimeInterval(-30))
         clock.advance(by: 31)
         _ = await provider.snapshot(previous: second)
+        #expect(http.requests.count == 2)
+    }
+
+    @Test("Por padrão, consulta a Anthropic no máximo a cada 3 minutos")
+    func defaultPolicyIsConservative() async throws {
+        #expect(ClaudeProvider.defaultPolicy.minimumInterval == 180)
+        let http = MockHTTPClient(status: 200, body: try Fixture.data("claude-usage.json"))
+        let provider = ClaudeProvider(
+            http: http, credentialSource: StubCredentialSource(credentials()), logRoots: noLogs, now: clock.provider)
+        _ = await provider.snapshot(previous: nil)
+        clock.advance(by: 170)
+        _ = await provider.snapshot(previous: nil)
+        #expect(http.requests.count == 1)
+        clock.advance(by: 11)
+        _ = await provider.snapshot(previous: nil)
         #expect(http.requests.count == 2)
     }
 

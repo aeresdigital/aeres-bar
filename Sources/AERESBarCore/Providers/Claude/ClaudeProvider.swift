@@ -6,6 +6,10 @@ public actor ClaudeProvider: UsageProvider {
 
     private static let endpoint = URL(string: "https://api.anthropic.com/api/oauth/usage")
 
+    /// Anthropic's usage endpoint answers 429 after a few calls within minutes, so responses are
+    /// reused for 3 minutes. Limits move slowly next to 5-hour and weekly windows.
+    public static let defaultPolicy = FetchPolicy(minimumInterval: 180)
+
     private let http: any HTTPClient
     private let credentialSource: any ClaudeCredentialSource
     private let scanner: ClaudeLogScanner
@@ -21,7 +25,7 @@ public actor ClaudeProvider: UsageProvider {
         credentialSource: any ClaudeCredentialSource = KeychainClaudeCredentialSource(),
         logRoots: [URL] = DataLocations.claudeProjectRoots,
         calendar: Calendar = .current,
-        policy: FetchPolicy = FetchPolicy(),
+        policy: FetchPolicy = ClaudeProvider.defaultPolicy,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.http = http
@@ -122,6 +126,7 @@ public actor ClaudeProvider: UsageProvider {
         case 429:
             let until = policy.backoffDeadline(from: response, now: now)
             retryAfter = until
+            Log.providers.notice("Claude: HTTP 429, Retry-After=\(response.headers["retry-after"] ?? "-", privacy: .public)")
             return .failure(
                 ProviderIssue(
                     .rateLimited,
