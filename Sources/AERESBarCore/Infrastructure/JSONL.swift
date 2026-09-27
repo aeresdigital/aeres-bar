@@ -8,8 +8,8 @@ final class JSONLTailReader {
     private var offsets: [String: UInt64] = [:]
     private let chunkSize: Int
 
-    init(chunkSize: Int = 8 << 20) {
-        self.chunkSize = chunkSize
+    init(chunkSize: Int = 4 << 20) {
+        self.chunkSize = max(chunkSize, 1)
     }
 
     /// Forgets files that are no longer of interest (deleted or too old).
@@ -27,43 +27,70 @@ final class JSONLTailReader {
     ) {
         var offset = offsets[path] ?? 0
         if fileSize < offset { offset = 0 }  // rewritten or truncated
-        guard fileSize > offset, let handle = FileHandle(forReadingAtPath: path) else {
-            offsets[path] = offset
-            return
-        }
-        defer { try? handle.close() }
-        do {
-            try handle.seek(toOffset: offset)
-        } catch {
-            return
-        }
+        offsets[path] = offset
+        guard fileSize > offset else { return }
+        let file = open(path, O_RDONLY | O_CLOEXEC)
+        guard file >= 0 else { return }
+        defer { close(file) }
+        guard lseek(file, off_t(offset), SEEK_SET) == off_t(offset), var buffer = MappedBuffer(capacity: chunkSize) else { return }
+        defer { buffer.release() }
 
-        var pending = Data()
+        // The buffer holds the unfinished line of the previous read (`carried` bytes) followed
+        // by what the next read brings.
+        var carried = 0
         while true {
-            let chunk: Data
-            do {
-                chunk = try handle.read(upToCount: chunkSize) ?? Data()
-            } catch {
-                break
+            if carried == buffer.capacity, !buffer.grow(keeping: carried) { break }  // a line longer than the buffer
+            let count = read(file, buffer.base + carried, buffer.capacity - carried)
+            if count < 0, errno == EINTR { continue }
+            guard count > 0 else { break }  // end of file, or an error: keep what was read
+            let valid = carried + count
+            var start = 0
+            while start < valid, let newline = memchr(buffer.base + start, 0x0A, valid - start) {
+                let end = buffer.base.distance(to: newline)
+                let line = UnsafeRawBufferPointer(start: buffer.base + start, count: end - start)
+                if needles.contains(where: { Bytes.contains(line, $0) }) { body(line) }
+                start = end + 1
             }
-            if chunk.isEmpty { break }
-            var buffer = pending
-            buffer.append(chunk)
-            let consumed = buffer.withUnsafeBytes { raw -> Int in
-                guard let base = raw.baseAddress else { return 0 }
-                var start = 0
-                while start < raw.count, let newline = memchr(base + start, 0x0A, raw.count - start) {
-                    let end = base.distance(to: UnsafeRawPointer(newline))
-                    let line = UnsafeRawBufferPointer(start: base + start, count: end - start)
-                    if needles.contains(where: { Bytes.contains(line, $0) }) { body(line) }
-                    start = end + 1
-                }
-                return start
-            }
-            offset += UInt64(consumed)
-            pending = consumed < buffer.count ? buffer.subdata(in: consumed..<buffer.count) : Data()
+            offset += UInt64(start)
+            carried = valid - start
+            if carried > 0, start > 0 { memmove(buffer.base, buffer.base + start, carried) }
         }
         offsets[path] = offset
+    }
+}
+
+/// Scratch memory mapped straight from the kernel. Unlike malloc'd blocks, which the allocator
+/// keeps cached (and counted in the app's footprint) after they are freed, it goes back to the
+/// system as soon as it is released: reading a gigabyte of logs leaves nothing behind.
+private struct MappedBuffer {
+    private(set) var base: UnsafeMutableRawPointer
+    private(set) var capacity: Int
+
+    init?(capacity: Int) {
+        guard let base = Self.map(capacity) else { return nil }
+        self.base = base
+        self.capacity = capacity
+    }
+
+    /// Doubles the capacity, keeping the first `count` bytes.
+    mutating func grow(keeping count: Int) -> Bool {
+        guard let bigger = Self.map(capacity * 2) else { return false }
+        memcpy(bigger, base, count)
+        munmap(base, capacity)
+        base = bigger
+        capacity *= 2
+        return true
+    }
+
+    func release() {
+        munmap(base, capacity)
+    }
+
+    private static func map(_ size: Int) -> UnsafeMutableRawPointer? {
+        guard let pointer = mmap(nil, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0),
+            pointer != UnsafeMutableRawPointer(bitPattern: -1)  // MAP_FAILED
+        else { return nil }
+        return pointer
     }
 }
 
