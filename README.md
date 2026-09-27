@@ -50,7 +50,7 @@
 - **Um só item na barra de menus**, para ocupar pouco espaço: um medidor com uma barra por provedor, cheia até o uso de cada um, e ao lado a porcentagem do provedor mais perto do limite. Dá para trocar o medidor pelo logo do provedor mais crítico ou esconder o número e deixar só o ícone.
 - **Número configurável:** limite mais crítico (padrão), janela principal, semanal ou tokens de hoje (somados); em % usada ou restante; com contagem regressiva opcional (`74% · 3d12h`).
 - **Alertas visuais:** o número fica laranja a partir de 80% e vermelho a partir de 95%.
-- **Painel ao passar o mouse** com todos os provedores de uma vez, cada um numa linha por janela de limite: barra de progresso, % usado e quanto falta para renovar. Clicar num provedor abre os detalhes:
+- **Painel ao passar o mouse** com todos os provedores de uma vez. Cada janela de limite ocupa uma linha, com barra de progresso, % usado e quanto falta para renovar. Clicar num provedor abre os detalhes:
   - quanto falta para renovar e quando: `Renova em 1h 17min · hoje às 05:10`;
   - tokens gastos na sessão, hoje e na semana (entrada, saída, cache lido e gravado, respostas);
   - plano da conta, uso extra, divisão do uso semanal por produto, cota por modelo, gasto e saldo.
@@ -58,7 +58,7 @@
 - **Clique** fixa o painel (fecha com clique fora ou Esc). **Clique direito** abre os ajustes.
 - **Atualização automática** a cada 1–10 min, ao acordar o Mac e quando o Antigravity abre ou fecha. **Atualizar agora** (no painel ou no menu) consulta as APIs na hora. Um dado já lido nunca some: sem conexão ou com a ferramenta fechada, o painel mostra a última leitura e zera as janelas cujo horário de renovação já passou.
 - **Abre com o macOS** (dá para desligar no menu).
-- **Leve:** 0% de CPU em repouso e ~20 MB de memória. A leitura dos logs é incremental: após a primeira passada, só lê os bytes novos.
+- **Leve:** praticamente 0% de CPU em repouso e cerca de 25 MB de memória com o painel fechado. A leitura dos logs é incremental: a primeira passada pelos logs dos últimos 8 dias leva alguns segundos em segundo plano (1,8 GB em ~5 s num Mac com Apple Silicon); as seguintes leem só os bytes novos, em ~0,1 s.
 
 ## Requisitos
 
@@ -67,15 +67,17 @@
   - [Claude Code](https://claude.com/claude-code), [Codex CLI](https://github.com/openai/codex) (login com ChatGPT) e/ou [Antigravity](https://antigravity.google);
   - GitHub Copilot: o login do [GitHub CLI](https://cli.github.com) (`gh auth login`) ou de um plugin do Copilot para Vim, Neovim, JetBrains ou Xcode;
   - Ollama e OpenRouter: uma chave de API (veja [Chaves de API](#chaves-de-api-openrouter-e-ollama-cloud)). Sem chave, o Ollama mostra só o servidor local.
-- Para compilar: Xcode 16 ou mais recente (Swift 6).
+- Para compilar: Xcode 26 ou mais recente (o CI compila com o Xcode 26.6 e o Swift 6.3).
 
 ## Instalação
 
 ### Pelo DMG
 
-1. Baixe o `AERES-Bar-x.y.z.dmg` mais recente em [Releases](https://github.com/aeresdigital/aeres-bar/releases) e confira o `.sha256` se quiser.
+1. Baixe o DMG:
+   - de uma versão publicada, em [Releases](https://github.com/aeresdigital/aeres-bar/releases) (`AERES-Bar-x.y.z.dmg`, com o `.sha256` ao lado). Ainda não há versão publicada: a primeira sai quando for criada uma tag `vX.Y.Z` (veja [Publicar uma versão](#publicar-uma-versão));
+   - ou a versão de desenvolvimento, gerada a cada push na `main`: em [Actions › CI](https://github.com/aeresdigital/aeres-bar/actions/workflows/ci.yml), abra a execução mais recente da `main` e baixe o artefato `AERES-Bar-<commit>` (fica disponível por 14 dias).
 2. Abra o DMG e arraste o **AERES Bar** para **Aplicativos**.
-3. Abra o app. Se a release não tiver assinatura Developer ID, o macOS pede confirmação na primeira vez: clique com o botão direito no app › **Abrir**. Pelo Terminal, dá no mesmo:
+3. Abra o app. Sem assinatura Developer ID, o macOS bloqueia a primeira abertura. No macOS 15 ou mais recente, vá em **Ajustes do Sistema › Privacidade e Segurança** e clique em **Abrir Mesmo Assim**; no macOS 14, clique com o botão direito no app › **Abrir**. Pelo Terminal, dá no mesmo:
 
    ```bash
    xattr -dr com.apple.quarantine "/Applications/AERES Bar.app"
@@ -89,7 +91,7 @@ cd aeres-bar
 make install
 ```
 
-`make install` compila em modo release, instala em `/Applications/AERES Bar.app` (substituindo uma versão anterior) e abre o app.
+O repositório é privado: o `git clone` pede uma conta com acesso. `make install` compila em modo release, instala em `/Applications/AERES Bar.app` (substituindo uma versão anterior) e abre o app.
 
 ### Desinstalar
 
@@ -97,7 +99,7 @@ make install
 make uninstall
 ```
 
-Desliga a abertura no login, encerra o app e apaga o app, o cache e as preferências. As chaves de API ficam no Chaves até você removê-las no menu ou com `--delete-key`.
+Desliga a abertura no login, encerra o app e apaga o app, o cache, as preferências e as chaves de API que ele guardou no Chaves.
 
 ## Como usar
 
@@ -159,8 +161,8 @@ Detalhes que valem saber:
 ## Privacidade e segurança
 
 - Tudo roda localmente. O app não envia telemetria nem tem servidor próprio.
-- Cada credencial só vai para o servidor oficial do seu provedor, por HTTPS: `api.anthropic.com`, `chatgpt.com`, `api.github.com`, `ollama.com` e `openrouter.ai`. Nunca é gravada em disco, em cache ou nos logs.
-- As chaves de API ficam no Chaves do macOS (serviço *AERES Bar*). São gravadas pelo `/usr/bin/security` com a chave enviada pela entrada padrão, nunca como argumento de linha de comando, que outros processos poderiam listar.
+- Cada credencial só vai para o servidor oficial do seu provedor, por HTTPS: `api.anthropic.com`, `chatgpt.com`, `api.github.com`, `ollama.com` e `openrouter.ai`. O app nunca a grava em arquivos, no cache ou nos logs.
+- As chaves de API ficam só no Chaves do macOS (serviço *AERES Bar*). São gravadas pelo `/usr/bin/security` com a chave enviada pela entrada padrão, nunca como argumento de linha de comando, que outros processos poderiam listar.
 - O cache (`~/Library/Application Support/AERES Bar/snapshots.json`) guarda só números, datas e textos exibidos.
 - O certificado autoassinado do Antigravity é aceito **apenas** para `127.0.0.1`, `localhost` e `::1`.
 - A leitura do Chaves usa `/usr/bin/security`, a mesma ferramenta com que o Claude Code grava o item, por isso não aparece pedido de senha.
@@ -199,7 +201,7 @@ Diagnóstico e logs:
 
 ### Ambiente
 
-- Xcode 16 ou mais recente (Swift 6, modo de linguagem 6 com checagem estrita de concorrência).
+- Xcode 26 ou mais recente (Swift 6.3 no CI), com o modo de linguagem Swift 6 e checagem estrita de concorrência.
 - Sem dependências em tempo de execução. O `swift-format` fica fixado numa versão exata no pacote separado [`BuildTools`](BuildTools/Package.swift), para que o lint local e o do CI sejam idênticos.
 
 ### Comandos

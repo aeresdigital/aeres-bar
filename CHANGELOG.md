@@ -23,6 +23,8 @@ Todas as mudanças relevantes do AERES Bar. O formato segue o [Keep a Changelog]
 
 - O botão de atualizar do painel girava de forma errática e parecia não fazer nada; agora mostra um indicador de progresso enquanto atualiza.
 - A API de uso da Anthropic é consultada no máximo a cada 3 min nas atualizações automáticas, evitando o HTTP 429.
+- A primeira leitura dos logs chegava a 1,7 GB de memória, e o app ficava com ~120 MB em repouso. Agora o pico é de ~115 MB e o repouso, ~26 MB.
+- `make uninstall` também apaga as chaves de API guardadas no Chaves.
 
 ## [1.0.0] - 2026-09-27
 

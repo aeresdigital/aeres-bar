@@ -98,11 +98,12 @@ Os logs do Claude Code passam fácil de 1 GB por semana. Para não reler tudo:
 
 - `RecentFiles` lista só `.jsonl` modificados nos últimos 8 dias.
 - `JSONLTailReader` guarda o deslocamento lido de cada arquivo. As próximas passadas leem só os bytes novos. Uma linha sem `\n` final fica para depois, porque pode estar sendo escrita, e um arquivo que encolheu é relido do início.
+- A leitura usa `read(2)` num buffer de 4 MB mapeado com `mmap`, que dobra se uma linha não couber e é devolvido ao sistema (`munmap`) ao fim de cada arquivo. A versão anterior lia blocos `Data` de 8 MB com `FileHandle`: os blocos voltavam com *autorelease* e, depois de liberados, ficavam no cache do `malloc`, contando na memória do app. A primeira passada chegava a 1,7 GB, e o app ficava com ~120 MB em repouso.
 - Linhas são filtradas por `memmem` (`"type":"assistant"`, `"token_usage_record"`) antes de qualquer parse.
 - Nas linhas do Claude, `ShallowJSON` percorre o objeto só no primeiro nível e só o objeto `usage` é decodificado. Os payloads de ferramentas, que são a maior parte dos bytes, nunca são parseados, e chaves `usage` dentro de conteúdo aninhado não confundem a leitura.
 - `TokenLedger` indexa eventos por resposta: `messageId|requestId` no Claude, que grava a mesma resposta por bloco de conteúdo, e `response_id` ou o total acumulado no Codex, que repete eventos `token_count`.
 
-Resultado medido: primeira leitura de ~1,3 GB em ~5 s em segundo plano; leituras seguintes em ~0,5 s, incluindo a rede.
+Resultado medido num Mac com Apple Silicon: a primeira leitura, de 1,8 GB (493 arquivos dos últimos 8 dias), leva ~4,6 s em segundo plano, com pico de ~115 MB de memória; as seguintes levam ~0,1 s. Em repouso, o app fica em ~26 MB e ~0% de CPU.
 
 ## Concorrência
 
@@ -143,4 +144,5 @@ A cobertura mínima é aplicada no CI (`scripts/coverage.sh`).
 | Mais crítico como número padrão | Responde "quão perto estou de ser bloqueado?", seja pela sessão ou pela semana, em qualquer provedor |
 | Não renovar tokens | Evita deslogar as ferramentas (ver acima) |
 | Chaves pelo `security` com entrada padrão | Sem pedido de senha, sem a chave na lista de processos |
+| Buffer mapeado (`mmap`) na leitura dos logs | Memória devolvida ao sistema na hora: sem blocos retidos por *autorelease* ou pelo cache do `malloc` (`malloc_zone_pressure_relief` não os devolvia) |
 | Imagens do README com dados de exemplo | Determinísticas e sem expor o uso de ninguém |
