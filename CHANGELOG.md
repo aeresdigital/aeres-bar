@@ -40,6 +40,7 @@ Cada merge na `main` que muda o app vira uma versão publicada automaticamente: 
 
 ### Corrigido
 
+- Com vários provedores lendo ao mesmo tempo num Mac com poucos núcleos, os comandos que o app roda (`security`, `ps`, `lsof`, `gh` e os CLIs do Qwen e do Doubao) podiam ficar esperando até o limite de tempo e falhar.
 - O botão de atualizar do painel girava de forma errática e parecia não fazer nada; agora mostra um indicador de progresso enquanto atualiza.
 - A API de uso da Anthropic é consultada no máximo a cada 3 min nas atualizações automáticas, evitando o HTTP 429.
 - A primeira leitura dos logs chegava a 1,7 GB de memória, e o app ficava com ~120 MB em repouso. Agora o pico é de ~115 MB e o repouso, ~26 MB.

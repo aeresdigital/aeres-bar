@@ -161,6 +161,7 @@ Resultado medido num Mac com Apple Silicon: a primeira leitura, de 1,8 GB (493 a
 - `UsageStore`, `AppSettings` e toda a UI são `@MainActor`. Os provedores são `actor`s e donos exclusivos de seus leitores de log e do seu `FetchState`, que não são thread-safe e não precisam ser.
 - Temporizadores são `Task`s com `Task.sleep` (canceláveis), não `Timer`.
 - Estado compartilhado fora de atores usa `OSAllocatedUnfairLock`, como na drenagem de pipes do `ProcessCommandRunner`. Um processo filho com saída grande não trava porque stdout e stderr são drenados em paralelo, e a drenagem começa antes de a entrada padrão ser escrita.
+- A drenagem roda em threads próprias, não nas filas globais: quem chama o `ProcessCommandRunner` espera bloqueado (os provedores são atores, então numa thread do Swift concurrency), e quando todas as threads desse pool esperam, o sistema não cria thread para o que está nas filas globais. Com drenagem nas filas, bastavam tantos comandos simultâneos quanto núcleos para todos esperarem até o limite de tempo; um teste roda o dobro disso em paralelo.
 
 ## Interface
 

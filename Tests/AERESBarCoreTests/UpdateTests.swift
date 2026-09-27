@@ -196,14 +196,9 @@ private func eventually(within seconds: Double = 10, _ condition: @Sendable () -
     return condition()
 }
 
-/// A process that has already exited, so the swap does not wait.
-private func exitedProcessID() throws -> Int32 {
-    let process = Process()
-    process.executableURL = URL(fileURLWithPath: "/usr/bin/true")
-    try process.run()
-    process.waitUntilExit()
-    return process.processIdentifier
-}
+/// Above macOS's largest process ID, so no process has it and the swap does not wait (an exited
+/// process's ID could be reused on a busy machine).
+private let noSuchProcess: Int32 = 99_999_999
 
 @Suite("Atualização: instalação")
 struct UpdateInstallerTests {
@@ -338,7 +333,7 @@ struct UpdateInstallerTests {
         let missing = work.appendingPathComponent("não existe.app")
 
         let result = ProcessCommandRunner().run(
-            "/bin/sh", [script.path, String(try exitedProcessID()), missing.path, installed.path, work.path, marker.path, "0"], timeout: 30)
+            "/bin/sh", [script.path, String(noSuchProcess), missing.path, installed.path, work.path, marker.path, "0"], timeout: 30)
         #expect(result?.status == 0)
         #expect(version(of: installed) == "41")
         #expect(FileManager.default.fileExists(atPath: marker.path))
