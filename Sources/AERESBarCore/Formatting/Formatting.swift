@@ -31,6 +31,11 @@ public enum Formatting {
         return text + suffix
     }
 
+    /// Whole numbers with thousands separators: 2000 → "2.000".
+    public static func count(_ value: Int) -> String {
+        value.formatted(.number.locale(locale))
+    }
+
     /// "R$ 110,00".
     public static func money(_ value: Double, currency: String) -> String {
         value.formatted(.currency(code: currency).locale(locale))

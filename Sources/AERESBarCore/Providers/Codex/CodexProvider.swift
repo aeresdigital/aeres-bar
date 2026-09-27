@@ -13,8 +13,7 @@ public actor CodexProvider: UsageProvider {
     private let calendar: Calendar
     private let now: @Sendable () -> Date
     private let policy: FetchPolicy
-    private var retryAfter: Date?
-    private var lastFetch: (result: CodexUsageParser.Result, at: Date)?
+    private var state = FetchState<CodexUsageParser.Result>()
 
     public init(
         home: URL = DataLocations.codexHome,
@@ -31,7 +30,7 @@ public actor CodexProvider: UsageProvider {
         self.now = now
     }
 
-    public func snapshot(previous: ProviderSnapshot?) async -> ProviderSnapshot {
+    public func snapshot(previous: ProviderSnapshot?, reason: RefreshReason) async -> ProviderSnapshot {
         let now = now()
         var snapshot = previous ?? ProviderSnapshot(provider: .codex)
         snapshot.checkedAt = now
@@ -43,12 +42,12 @@ public actor CodexProvider: UsageProvider {
 
         scanner.update(now: now)
 
-        switch await limits(now: now) {
+        switch await limits(now: now, reason: reason) {
         case .success(let fetch):
-            snapshot.windows = fetch.result.windows
-            snapshot.details = fetch.result.details
-            snapshot.plan = fetch.result.plan ?? snapshot.plan
-            snapshot.account = fetch.result.email
+            snapshot.windows = fetch.value.windows
+            snapshot.details = fetch.value.details
+            snapshot.plan = fetch.value.plan ?? snapshot.plan
+            snapshot.account = fetch.value.email
             snapshot.markFresh(at: fetch.at, source: "API do ChatGPT + logs locais")
         case .failure(let issue):
             // Rollouts carry the limits as of each turn, which beats an older cache.
@@ -73,18 +72,16 @@ public actor CodexProvider: UsageProvider {
         return snapshot
     }
 
-    /// The last response while it is recent, otherwise a new request.
-    private func limits(now: Date) async -> Result<(result: CodexUsageParser.Result, at: Date), ProviderIssue> {
-        if let lastFetch, now.timeIntervalSince(lastFetch.at) < policy.minimumInterval {
-            return .success(lastFetch)
-        }
+    /// The last response while the policy allows reusing it, otherwise a new request.
+    private func limits(now: Date, reason: RefreshReason) async -> Result<(value: CodexUsageParser.Result, at: Date), ProviderIssue> {
+        if let cached = state.reusable(now: now, reason: reason, policy: policy) { return .success(cached) }
         let outcome = await fetchLimits(now: now)
-        if case .success(let result) = outcome { lastFetch = (result, now) }
+        if case .success(let result) = outcome { state.record(result, at: now) }
         return outcome.map { ($0, now) }
     }
 
     private func fetchLimits(now: Date) async -> Result<CodexUsageParser.Result, ProviderIssue> {
-        if let retryAfter, retryAfter > now {
+        if state.isBackingOff(at: now) {
             return .failure(ProviderIssue(.rateLimited, "Muitas consultas seguidas ao ChatGPT — nova tentativa em alguns minutos."))
         }
         guard let auth = CodexAuth.load(home: home) else {
@@ -124,7 +121,7 @@ public actor CodexProvider: UsageProvider {
             return .failure(ProviderIssue(.unauthorized, "O ChatGPT recusou a sessão do Codex. Abra o Codex para renová-la."))
         case 429:
             let until = policy.backoffDeadline(from: response, now: now)
-            retryAfter = until
+            state.retryAfter = until
             Log.providers.notice("Codex: HTTP 429, Retry-After=\(response.headers["retry-after"] ?? "-", privacy: .public)")
             return .failure(
                 ProviderIssue(

@@ -2,12 +2,20 @@ import AERESBarCore
 import AppKit
 import SwiftUI
 
-/// Which provider the panel shows and whether it was pinned by a click.
+/// Which providers show their full details, and whether the panel was pinned by a click.
 @MainActor
 @Observable
 final class PanelState {
-    var selected: ProviderID = .claude
+    var expanded: Set<ProviderID> = []
     var pinned = false
+
+    func toggle(_ provider: ProviderID) {
+        if expanded.contains(provider) {
+            expanded.remove(provider)
+        } else {
+            expanded.insert(provider)
+        }
+    }
 }
 
 /// Actions the panel's buttons trigger.
@@ -17,8 +25,8 @@ struct PanelActions {
     var quit: @MainActor () -> Void = {}
 }
 
-/// Shows the details panel under a menu bar item. On hover it follows the pointer and closes
-/// when the pointer leaves; on click it stays until a click elsewhere or Esc.
+/// Shows the panel with every provider under the menu bar item. On hover it closes when the
+/// pointer leaves; on click it stays until a click elsewhere or Esc.
 @MainActor
 final class PanelController {
     let state = PanelState()
@@ -50,7 +58,7 @@ final class PanelController {
         self.isStatusItemWindow = isStatusItemWindow
 
         var actions = PanelActions()
-        actions.refresh = { [weak store] in store?.refreshAll() }
+        actions.refresh = { [weak store] in store?.refreshAll(reason: .manual) }
         actions.openMenu = { [weak self] in self?.showSettingsMenu() }
         actions.quit = { NSApp.terminate(nil) }
         let hosting = PanelHostingView(rootView: PanelRootView(store: store, settings: settings, state: state, actions: actions))
@@ -66,21 +74,16 @@ final class PanelController {
 
     // MARK: Triggers
 
-    func hoverBegan(_ provider: ProviderID, anchor: NSStatusBarButton) {
+    func hoverBegan(anchor: NSStatusBarButton) {
         if isVisible {
-            // Slide across the items like a menu.
-            state.selected = provider
-            self.anchor = anchor
             outsideSince = nil
-            fitToContent()
-            store.refreshIfStale(provider)
             return
         }
         showTask?.cancel()
         showTask = Task { [weak self] in
             try? await Task.sleep(for: Self.showDelay)
             guard !Task.isCancelled else { return }
-            self?.show(provider, anchor: anchor, pinned: false)
+            self?.show(anchor: anchor, pinned: false)
         }
     }
 
@@ -90,20 +93,19 @@ final class PanelController {
         // Hiding is left to the pointer watch, so the pointer can travel into the panel.
     }
 
-    func clicked(_ provider: ProviderID, anchor: NSStatusBarButton) {
+    func clicked(anchor: NSStatusBarButton) {
         showTask?.cancel()
-        if isVisible && state.pinned && state.selected == provider {
+        if isVisible && state.pinned {
             hide()
         } else {
-            show(provider, anchor: anchor, pinned: true)
+            show(anchor: anchor, pinned: true)
         }
     }
 
     // MARK: Showing and hiding
 
-    func show(_ provider: ProviderID, anchor: NSStatusBarButton, pinned: Bool) {
+    func show(anchor: NSStatusBarButton, pinned: Bool) {
         showTask?.cancel()
-        state.selected = provider
         state.pinned = pinned
         self.anchor = anchor
         outsideSince = nil
@@ -123,7 +125,7 @@ final class PanelController {
             installClickMonitors()
             panel.makeKey()
         }
-        store.refreshIfStale(provider)
+        store.refreshStale()
     }
 
     func hide() {

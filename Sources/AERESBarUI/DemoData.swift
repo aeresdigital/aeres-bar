@@ -1,7 +1,7 @@
 import AERESBarCore
 import Foundation
 
-/// Sample snapshots covering every state of the UI, for documentation images.
+/// Sample snapshots covering every state of the UI, for documentation images and tests.
 @MainActor
 public enum DemoData {
     public static func store(now: Date = Date()) -> UsageStore {
@@ -11,6 +11,8 @@ public enum DemoData {
     static func snapshots(now: Date) -> [ProviderSnapshot] {
         func hours(_ value: Double) -> Date { now.addingTimeInterval(value * 3_600) }
         let week: Double = 7 * 86_400
+        let month: Double = 30 * 86_400
+        let fresh = now.addingTimeInterval(-12)
 
         let claude = ProviderSnapshot(
             provider: .claude,
@@ -35,7 +37,7 @@ public enum DemoData {
                 DetailRow(label: "Semana por produto", value: "Claude Code 96% · Cowork 3% · Outros 1%"),
                 DetailRow(label: "Uso extra", value: "desativado"),
             ],
-            limitsUpdatedAt: now.addingTimeInterval(-12),
+            limitsUpdatedAt: fresh,
             checkedAt: now,
             source: "API da Anthropic + logs locais"
         )
@@ -57,7 +59,7 @@ public enum DemoData {
                 weekIsRolling: false,
                 lastActivity: now.addingTimeInterval(-300)
             ),
-            limitsUpdatedAt: now.addingTimeInterval(-12),
+            limitsUpdatedAt: fresh,
             checkedAt: now,
             source: "API do ChatGPT + logs locais"
         )
@@ -87,15 +89,75 @@ public enum DemoData {
             ],
             models: [
                 ModelQuota(label: "Gemini 3.8 Flash (High)", remainingFraction: 0.38, resetsAt: hours(121)),
-                ModelQuota(label: "Gemini 3.1 Pro (High)", remainingFraction: 0.38, resetsAt: hours(121)),
                 ModelQuota(label: "Claude Sonnet 4.6 (Thinking)", remainingFraction: 0.03, resetsAt: hours(27)),
-                ModelQuota(label: "GPT-OSS 120B (Medium)", remainingFraction: 0.03, resetsAt: hours(27)),
             ],
-            limitsUpdatedAt: now.addingTimeInterval(-12),
+            limitsUpdatedAt: fresh,
             checkedAt: now,
             source: "Language server local do Antigravity"
         )
-        return [claude, codex, antigravity]
+
+        let copilot = ProviderSnapshot(
+            provider: .copilot,
+            status: .ok,
+            plan: "Pro",
+            windows: [
+                UsageWindow(
+                    id: "copilot.premium_interactions",
+                    title: "Requisições premium",
+                    subtitle: "164 de 300 restantes no mês",
+                    usedPercent: 45,
+                    resetsAt: hours(96),
+                    windowSeconds: month,
+                    isPrimary: true
+                )
+            ],
+            details: [DetailRow(label: "Chat", value: "ilimitado"), DetailRow(label: "Autocompletar", value: "ilimitado")],
+            limitsUpdatedAt: fresh,
+            checkedAt: now,
+            source: "API do GitHub"
+        )
+
+        let ollama = ProviderSnapshot(
+            provider: .ollama,
+            status: .ok,
+            windows: [
+                UsageWindow(
+                    id: "ollama.session", title: "Sessão (5h)", subtitle: "48 requisições", usedPercent: 22, windowSeconds: 18_000,
+                    isPrimary: true),
+                UsageWindow(id: "ollama.weekly", title: "Semanal", subtitle: "310 requisições", usedPercent: 58, windowSeconds: week),
+            ],
+            details: [
+                DetailRow(label: "Servidor local", value: "v0.13.2 · em execução"),
+                DetailRow(label: "Modelos carregados", value: "qwen3-coder:30b (18,6 GB)"),
+            ],
+            limitsUpdatedAt: fresh,
+            checkedAt: now,
+            source: "Ollama Cloud + servidor local"
+        )
+
+        let openRouter = ProviderSnapshot(
+            provider: .openrouter,
+            status: .ok,
+            windows: [
+                UsageWindow(
+                    id: "openrouter.limit",
+                    title: "Limite da chave · mensal",
+                    subtitle: "US$ 25,50 de US$ 100,00",
+                    usedPercent: 25.5,
+                    resetsAt: hours(80),
+                    windowSeconds: month,
+                    isPrimary: true
+                )
+            ],
+            details: [
+                DetailRow(label: "Gasto", value: "hoje US$ 1,20 · semana US$ 5,30 · mês US$ 25,50"),
+                DetailRow(label: "Saldo", value: "US$ 74,75 de US$ 100,50"),
+            ],
+            limitsUpdatedAt: fresh,
+            checkedAt: now,
+            source: "API do OpenRouter"
+        )
+        return [claude, codex, antigravity, copilot, ollama, openRouter]
     }
 }
 
@@ -109,5 +171,5 @@ actor DemoProvider: UsageProvider {
         fixed = snapshot
     }
 
-    func snapshot(previous: ProviderSnapshot?) async -> ProviderSnapshot { fixed }
+    func snapshot(previous: ProviderSnapshot?, reason: RefreshReason) async -> ProviderSnapshot { fixed }
 }

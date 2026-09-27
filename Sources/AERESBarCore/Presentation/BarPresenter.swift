@@ -111,3 +111,99 @@ public enum BarPresenter {
         return text
     }
 }
+
+/// How the single menu bar item draws its icon.
+public enum BarIconStyle: String, CaseIterable, Codable, Sendable {
+    /// One small bar per provider, filled up to its usage.
+    case meters
+    /// The logo of the provider closest to its limit.
+    case criticalLogo
+
+    public var title: String {
+        switch self {
+        case .meters: "Medidores de todos os provedores"
+        case .criticalLogo: "Logo do provedor mais crítico"
+        }
+    }
+}
+
+/// What the single menu bar item shows for all providers together.
+public struct OverallBarValue: Equatable, Sendable {
+    /// One provider's position in the meter icon.
+    public struct Level: Equatable, Sendable {
+        public var provider: ProviderID
+        /// Effective usage of the provider's driving window; `nil` while there is nothing to show.
+        public var usedPercent: Double?
+    }
+
+    public var text: String
+    public var levels: [Level]
+    /// The provider closest to a limit.
+    public var critical: ProviderID?
+    public var usedPercent: Double?
+    public var hasData: Bool
+
+    public var alert: AlertLevel? { usedPercent.flatMap(AlertLevel.init(usedPercent:)) }
+}
+
+extension BarPresenter {
+    /// Combines every enabled provider into the single menu bar item: the number comes from the
+    /// provider closest to a limit (or today's tokens summed), the meter from each provider's level.
+    public static func overall(
+        for snapshots: [ProviderID: ProviderSnapshot],
+        providers: [ProviderID],
+        config: Config,
+        now: Date
+    ) -> OverallBarValue {
+        var levels: [OverallBarValue.Level] = []
+        var critical: (provider: ProviderID, value: BarValue)?
+        var tokensToday = 0
+        var hasTokens = false
+        var loading = false
+
+        for provider in providers {
+            let snapshot = snapshots[provider]
+            if snapshot == nil || snapshot?.status == .loading { loading = true }
+            if let tokens = snapshot?.tokens {
+                tokensToday += tokens.today.total
+                hasTokens = true
+            }
+            // Tools that are absent, or that report no limits, stay out of the meter.
+            guard let snapshot, snapshot.status != .notInstalled, !snapshot.windows.isEmpty || snapshot.status == .loading else {
+                continue
+            }
+            let value = value(for: snapshot, config: config, now: now)
+            levels.append(OverallBarValue.Level(provider: provider, usedPercent: value.usedPercent))
+            if let used = value.usedPercent, used > (critical?.value.usedPercent ?? -1) {
+                critical = (provider, value)
+            }
+        }
+
+        let text: String
+        if config.metric == .tokensToday, hasTokens {
+            text = Formatting.tokens(tokensToday)
+        } else if let critical, config.metric != .tokensToday {
+            text = critical.value.text
+        } else if let critical {
+            text = Formatting.percent(config.showRemaining ? 100 - (critical.value.usedPercent ?? 0) : critical.value.usedPercent ?? 0)
+        } else {
+            text = loading ? "…" : "–"
+        }
+        return OverallBarValue(
+            text: text,
+            levels: levels,
+            critical: critical?.provider,
+            usedPercent: critical?.value.usedPercent,
+            hasData: critical != nil || (config.metric == .tokensToday && hasTokens)
+        )
+    }
+
+    /// VoiceOver description of the single menu bar item.
+    public static func accessibilityLabel(for overall: OverallBarValue) -> String {
+        guard !overall.levels.isEmpty else { return "\(AppInfo.name): sem dados" }
+        let parts = overall.levels.map { level in
+            "\(level.provider.shortName) \(level.usedPercent.map(Formatting.percent) ?? "sem dados")"
+        }
+        return "\(AppInfo.name): " + parts.joined(separator: ", ")
+    }
+}

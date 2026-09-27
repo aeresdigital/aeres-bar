@@ -101,8 +101,90 @@ public enum UsagePresentation {
         return "\(Formatting.percent(fraction * 100)) livre"
     }
 
+    /// Time left in a compact form for one-line rows: "4h51", "3d12h", "—" when the clock has not
+    /// started, "" when the provider does not say.
+    public static func compactReset(for window: UsageWindow, now: Date) -> String {
+        if window.notStarted { return "—" }
+        guard let reset = window.resetsAt else { return "" }
+        if reset <= now { return "renovou" }
+        return Formatting.compactCountdown(reset.timeIntervalSince(now))
+    }
+
+    /// "Tokens: hoje 118M · semana 3,6B".
+    public static func tokenLine(for summary: TokenSummary) -> String? {
+        guard !summary.isEmpty else { return nil }
+        var parts: [String] = []
+        if let session = summary.session, session.total > 0 { parts.append("sessão \(Formatting.tokens(session.total))") }
+        parts.append("hoje \(Formatting.tokens(summary.today.total))")
+        parts.append("\(summary.weekIsRolling ? "7 dias" : "semana") \(Formatting.tokens(summary.week.total))")
+        return "Tokens: " + parts.joined(separator: " · ")
+    }
+
+    /// When the most recent refresh happened, for the panel header.
+    public static func updatedLine(for snapshots: [ProviderSnapshot], now: Date) -> String {
+        guard let latest = snapshots.compactMap(\.checkedAt).max() else { return "Ainda não atualizado" }
+        return "Atualizado \(Formatting.relative(latest, now: now))"
+    }
+
+    /// "Não configurados: Ollama, OpenRouter".
+    public static func unconfiguredLine(for providers: [ProviderID]) -> String? {
+        guard !providers.isEmpty else { return nil }
+        return "Não configurados: " + providers.map(\.displayName).joined(separator: ", ")
+    }
+
     /// VoiceOver description of a window row.
     public static func accessibilityLabel(for window: UsageWindow, now: Date) -> String {
         "\(window.title): \(Formatting.percent(window.effectiveUsed(at: now))) usado. \(resetDescription(for: window, now: now))"
+    }
+}
+
+/// One ring of the summary row at the top of the panel.
+public struct SummaryRing: Equatable, Identifiable, Sendable {
+    public var provider: ProviderID
+    /// How much of the ring is filled, from 0 to 1; `nil` while there is nothing to show.
+    public var fraction: Double?
+    /// "74%", or "…" while loading and "–" without data.
+    public var text: String
+    public var alert: AlertLevel?
+    /// What the ring stands for, for the tooltip and VoiceOver.
+    public var description: String
+
+    public var id: ProviderID { provider }
+}
+
+extension UsagePresentation {
+    /// The summary row: one ring per provider with limits, the same ones and numbers as the menu
+    /// bar meter. A ring fills up to the percentage shown under it (used, or left when the user
+    /// prefers that); its color comes from the usage alert.
+    public static func summaryRings(
+        for snapshots: [ProviderID: ProviderSnapshot],
+        providers: [ProviderID],
+        config: BarPresenter.Config,
+        now: Date
+    ) -> [SummaryRing] {
+        // Rings are percentages: token counts and countdowns stay in the menu bar.
+        var ringConfig = config
+        if ringConfig.metric == .tokensToday { ringConfig.metric = .mostCritical }
+        ringConfig.showCountdown = false
+
+        let levels = BarPresenter.overall(for: snapshots, providers: providers, config: ringConfig, now: now).levels
+        return levels.map { level in
+            let snapshot = snapshots[level.provider]
+            let value = BarPresenter.value(for: snapshot, config: ringConfig, now: now)
+            let shown = value.usedPercent.map { config.showRemaining ? 100 - $0 : $0 }
+            let description: String
+            if let window = value.window {
+                description = "\(level.provider.displayName) · \(accessibilityLabel(for: window, now: now))"
+            } else {
+                description = "\(level.provider.displayName): \(snapshot?.status == .loading ? "carregando" : "sem dados")"
+            }
+            return SummaryRing(
+                provider: level.provider,
+                fraction: shown.map { min(max($0 / 100, 0), 1) },
+                text: value.text,
+                alert: value.alert,
+                description: description
+            )
+        }
     }
 }
